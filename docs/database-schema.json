@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PM MVP Kanban Database Schema",
+  "description": "SQLite schema for the MVP project board, supporting multiple users with one board each.",
+  "type": "object",
+  "properties": {
+    "users": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "Primary key" },
+          "username": { "type": "string", "description": "Login username; unique for each user" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "username", "created_at"]
+      }
+    },
+    "boards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "user_id": { "type": "integer", "description": "Foreign key to users.id" },
+          "board_json": {
+            "type": "object",
+            "description": "Serialized board state containing columns and cards",
+            "properties": {
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "title": { "type": "string" },
+                    "cardIds": { "type": "array", "items": { "type": "string" } }
+                  },
+                  "required": ["id", "title", "cardIds"]
+                }
+              },
+              "cards": {
+                "type": "object",
+                "description": "Map of card ids to card payloads",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "title": { "type": "string" },
+                    "details": { "type": "string" }
+                  },
+                  "required": ["id", "title", "details"]
+                }
+              }
+            },
+            "required": ["columns", "cards"]
+          },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["user_id", "board_json", "updated_at"]
+      }
+    }
+  },
+  "required": ["users", "boards"]
+}

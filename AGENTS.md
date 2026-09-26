@@ -24,13 +24,13 @@ For the MVP, this will run locally (in a docker container)
 - Everything packaged into a Docker container
 - Use "uv" as the package manager for python in the Docker container
 - Use OpenRouter for the AI calls. An OPENROUTER_API_KEY is in .env in the project root
-- Use `openai/gpt-oss-120b` as the model
+- Use `nvidia/nemotron-3-super-120b-a12b:free` as the model (originally `z-ai/glm-5.2:free`, but OpenRouter discontinued that free tier; this replacement also supports structured outputs, needed for Part 9)
 - Use SQLLite local database for the database, creating a new db if it doesn't exist
 - Start and Stop server scripts for Mac, PC, Linux in scripts/
 
 ## Starting Point
 
-A working MVP of the frontend has been built and is already in frontend. This is not yet designed for the Docker setup. It's a pure frontend-only demo.
+All business requirements above are implemented and verified end-to-end (real Docker build, real SQLite persistence, real OpenRouter calls) — see docs/PLAN.md for the full status and what remains as possible future work beyond the original MVP scope.
 
 ## Color Scheme
 

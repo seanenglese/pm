@@ -1,3 +1,13 @@
+# SQLite runtime database
+backend/data/
+
+# Frontend static export, built into the Docker image (see Dockerfile)
+backend/app/static/
+
+# Playwright output
+frontend/test-results/
+frontend/playwright-report/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
