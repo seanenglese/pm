@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -102,5 +103,60 @@ def test_board_update_rejects_invalid_payload() -> None:
         "/api/users/user/board",
         json={"columns": [{"id": "col-a", "title": "A"}], "cards": {}},
     )
+
+    assert response.status_code == 422
+
+
+CARD_K = {"id": "card-k", "title": "K", "details": "d"}
+
+
+@pytest.mark.parametrize(
+    "board",
+    [
+        pytest.param(
+            {
+                "columns": [{"id": "col-a", "title": "A", "cardIds": ["missing"]}],
+                "cards": {},
+            },
+            id="unknown-card-id",
+        ),
+        pytest.param(
+            {
+                "columns": [
+                    {"id": "col-a", "title": "A", "cardIds": ["card-k"]},
+                    {"id": "col-b", "title": "B", "cardIds": ["card-k"]},
+                ],
+                "cards": {"card-k": CARD_K},
+            },
+            id="card-in-two-columns",
+        ),
+        pytest.param(
+            {
+                "columns": [{"id": "col-a", "title": "A", "cardIds": ["card-k", "card-k"]}],
+                "cards": {"card-k": CARD_K},
+            },
+            id="card-twice-in-one-column",
+        ),
+        pytest.param(
+            {
+                "columns": [{"id": "col-a", "title": "A", "cardIds": ["other-key"]}],
+                "cards": {"other-key": CARD_K},
+            },
+            id="card-key-mismatch",
+        ),
+        pytest.param(
+            {
+                "columns": [
+                    {"id": "col-a", "title": "A", "cardIds": []},
+                    {"id": "col-a", "title": "A2", "cardIds": []},
+                ],
+                "cards": {},
+            },
+            id="duplicate-column-id",
+        ),
+    ],
+)
+def test_board_update_rejects_inconsistent_board(board) -> None:
+    response = client.put("/api/users/user/board", json=board)
 
     assert response.status_code == 422

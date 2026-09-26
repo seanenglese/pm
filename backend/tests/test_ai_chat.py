@@ -83,6 +83,23 @@ def test_ask_about_board_drops_unsafe_board_update(monkeypatch):
     assert result.board_update is None
 
 
+def test_ask_about_board_drops_board_update_with_duplicated_card(monkeypatch):
+    duplicated_board = {
+        "columns": [
+            {"id": "col-a", "title": "A", "cardIds": ["card-1"]},
+            {"id": "col-b", "title": "B", "cardIds": ["card-1"]},
+        ],
+        "cards": {"card-1": {"id": "card-1", "title": "Existing", "details": "Notes."}},
+    }
+    content = json.dumps({"reply": "Done", "board_update": duplicated_board})
+    _mock_call_openrouter(monkeypatch, content)
+
+    result = asyncio.run(ask_about_board(SAMPLE_BOARD, "Do something", []))
+
+    assert result.reply == "Done"
+    assert result.board_update is None
+
+
 def test_ask_about_board_raises_on_invalid_json(monkeypatch):
     _mock_call_openrouter(monkeypatch, "not json")
 
