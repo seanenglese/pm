@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS frontend-builder
+FROM node:24-bookworm-slim AS frontend-builder
 
 WORKDIR /src/frontend
 COPY frontend/package*.json ./
@@ -12,12 +12,12 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-COPY backend/pyproject.toml ./backend/pyproject.toml
+COPY backend/pyproject.toml backend/uv.lock ./backend/
 COPY backend/app ./backend/app
 COPY --from=frontend-builder /src/frontend/out ./backend/app/static
 
 WORKDIR /app/backend
-RUN uv sync --no-dev
+RUN uv sync --locked --no-dev
 
 EXPOSE 8000
 
