@@ -49,6 +49,30 @@ const mockBoardApi = (seed: BoardData = initialData, chatHandler?: ChatHandler) 
   return fetchMock;
 };
 
+/** Makes matching requests wait until the returned `release` is called. */
+const holdRequests = (
+  fetchMock: ReturnType<typeof mockBoardApi>,
+  shouldHold: (url: string, init?: RequestInit) => boolean
+) => {
+  const realImpl = fetchMock.getMockImplementation()!;
+  const pending: Array<() => void> = [];
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (shouldHold(url, init)) {
+      await new Promise<void>((resolve) => pending.push(resolve));
+    }
+    return realImpl(url, init);
+  });
+  return { release: () => pending.shift()?.() };
+};
+
+const putBodies = (fetchMock: ReturnType<typeof mockBoardApi>) =>
+  fetchMock.mock.calls
+    .filter(([, init]) => init?.method === "PUT")
+    .map(([, init]) => JSON.parse(init!.body as string) as BoardData);
+
+const chatCallCount = (fetchMock: ReturnType<typeof mockBoardApi>) =>
+  fetchMock.mock.calls.filter(([url]) => url.includes("/chat")).length;
+
 const mockFailingBoardApi = () => {
   const fetchMock = vi.fn(
     async () => ({ ok: false, status: 500, json: async () => ({}) }) as Response
@@ -143,6 +167,25 @@ describe("KanbanBoard", () => {
     });
   });
 
+  it("sends one save at a time and finishes with the newest board", async () => {
+    const fetchMock = mockBoardApi();
+    render(<KanbanBoard username="user" />);
+    await waitFor(() => expect(getFirstColumn()).toBeInTheDocument());
+    const puts = holdRequests(fetchMock, (_url, init) => init?.method === "PUT");
+
+    const input = within(getFirstColumn()).getByLabelText("Column title");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Abc");
+
+    // Only the first save is in flight; the later keystrokes wait behind it.
+    expect(putBodies(fetchMock)).toHaveLength(1);
+
+    puts.release();
+    await waitFor(() => expect(putBodies(fetchMock)).toHaveLength(2));
+    expect(putBodies(fetchMock)[1].columns[0].title).toBe("Abc");
+    puts.release();
+  });
+
   it("reloads the previously saved board after a refresh", async () => {
     mockBoardApi();
     const { unmount } = render(<KanbanBoard username="user" />);
@@ -217,6 +260,39 @@ describe("KanbanBoard chat sidebar", () => {
         within(getFirstColumn()).getByLabelText("Column title")
       ).toHaveValue("Renamed by AI")
     );
+  });
+
+  it("waits for pending saves and locks the board while the assistant works", async () => {
+    const fetchMock = mockBoardApi(initialData, (message) => ({
+      reply: `You said: ${message}`,
+    }));
+    render(<KanbanBoard username="user" />);
+    await waitFor(() => expect(getFirstColumn()).toBeInTheDocument());
+    const held = holdRequests(
+      fetchMock,
+      (url, init) => init?.method === "PUT" || url.includes("/chat")
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /delete align roadmap themes/i })
+    );
+    await userEvent.type(screen.getByLabelText("Chat message"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    const titleInput = within(getFirstColumn()).getByLabelText("Column title");
+    expect(screen.getByRole("group", { name: "Board" })).toBeDisabled();
+    expect(titleInput).toBeDisabled();
+    expect(chatCallCount(fetchMock)).toBe(0);
+
+    held.release(); // the delete's save lands, then the chat request goes out
+    await waitFor(() => expect(chatCallCount(fetchMock)).toBe(1));
+
+    held.release(); // the assistant replies
+    await waitFor(() =>
+      expect(screen.getByText("You said: hello")).toBeInTheDocument()
+    );
+    expect(titleInput).toBeEnabled();
+    expect(screen.queryByText("Align roadmap themes")).not.toBeInTheDocument();
   });
 
   it("shows an error when the assistant call fails", async () => {

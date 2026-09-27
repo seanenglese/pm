@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -60,19 +60,38 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
 
   const cardsById = useMemo(() => board?.cards ?? {}, [board]);
 
-  const updateBoard = (updater: (prev: BoardData) => BoardData) => {
-    setBoard((current) => {
-      if (!current) {
-        return current;
-      }
+  // Saves run one at a time so they can't land out of order. Edits made while
+  // a save is in flight collapse into a single follow-up save of the newest board.
+  const unsavedBoard = useRef<BoardData | null>(null);
+  const activeSave = useRef<Promise<void> | null>(null);
 
-      const next = updater(current);
-      setSaveError(null);
-      saveBoard(username, next).catch(() => {
-        setSaveError("Could not save your changes. Try again.");
-      });
-      return next;
-    });
+  const queueSave = (next: BoardData) => {
+    unsavedBoard.current = next;
+    if (activeSave.current) {
+      return;
+    }
+    activeSave.current = (async () => {
+      while (unsavedBoard.current) {
+        const toSave = unsavedBoard.current;
+        unsavedBoard.current = null;
+        try {
+          await saveBoard(username, toSave);
+          setSaveError(null);
+        } catch {
+          setSaveError("Could not save your changes. Try again.");
+        }
+      }
+      activeSave.current = null;
+    })();
+  };
+
+  const updateBoard = (updater: (prev: BoardData) => BoardData) => {
+    if (!board || isChatLoading) {
+      return;
+    }
+    const next = updater(board);
+    setBoard(next);
+    queueSave(next);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -142,6 +161,8 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
     setIsChatLoading(true);
 
     try {
+      // The assistant reads the board from the server, so let pending edits land first.
+      await activeSave.current;
       const { reply, board: updatedBoard } = await sendChatMessage(
         username,
         message,
@@ -234,23 +255,30 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
 
         <div className="flex flex-col gap-6 lg:flex-row">
           <DndContext
-            sensors={sensors}
+            sensors={isChatLoading ? [] : sensors}
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <section className="grid flex-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
-              {board.columns.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                  onRename={handleRenameColumn}
-                  onAddCard={handleAddCard}
-                  onDeleteCard={handleDeleteCard}
-                />
-              ))}
-            </section>
+            {/* The board is read-only while the assistant works, so its reply can't overwrite an edit. */}
+            <fieldset
+              disabled={isChatLoading}
+              aria-label="Board"
+              className="min-w-0 flex-1 transition disabled:opacity-60"
+            >
+              <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+                {board.columns.map((column) => (
+                  <KanbanColumn
+                    key={column.id}
+                    column={column}
+                    cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                    onRename={handleRenameColumn}
+                    onAddCard={handleAddCard}
+                    onDeleteCard={handleDeleteCard}
+                  />
+                ))}
+              </section>
+            </fieldset>
             <DragOverlay>
               {activeCard ? (
                 <div className="w-[260px]">

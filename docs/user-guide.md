@@ -48,7 +48,7 @@ To start over with the default board, stop the app and delete `backend/data/pm_m
 
 ## The AI assistant
 
-The **Board Assistant** panel sits to the right of the board (below it in a narrow window). Type a message and click **Send**, or press Enter. While the assistant is working you'll see "Thinking...", and the message box is disabled until it replies.
+The **Board Assistant** panel sits to the right of the board (below it in a narrow window). Type a message and click **Send**, or press Enter. While the assistant is working you'll see "Thinking...", and both the message box and the board are locked (the board dims) until it replies, so a change you make can't be overwritten by the assistant's answer.
 
 You can ask it questions, for example:
 
