@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Literal
 
@@ -11,7 +11,13 @@ from pydantic import BaseModel, ConfigDict
 from app.ai import AIConnectionError, ask_about_board, call_openrouter
 from app.models import BoardData
 
-app = FastAPI(title="PM MVP Backend")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="PM MVP Backend", lifespan=lifespan)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "pm_mvp.db"
 
@@ -164,9 +170,6 @@ def save_board_for_user(username: str, board: dict) -> dict:
             (user_id, json.dumps(board)),
         )
         return board
-
-
-init_db()
 
 
 @app.get("/api/health")

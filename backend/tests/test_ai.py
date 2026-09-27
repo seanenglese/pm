@@ -66,6 +66,27 @@ def test_call_openrouter_raises_on_non_200_response(monkeypatch):
         asyncio.run(ai.call_openrouter([{"role": "user", "content": "2 + 2?"}]))
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(
+            {"error": {"code": 502, "message": "Provider returned error"}},
+            id="error-body",
+        ),
+        pytest.param({"choices": []}, id="no-choices"),
+        pytest.param({"choices": [{"message": {"content": None}}]}, id="null-content"),
+    ],
+)
+def test_call_openrouter_raises_on_unusable_200_response(monkeypatch, payload):
+    response = FakeResponse(200, payload)
+    monkeypatch.setattr(
+        ai.httpx, "AsyncClient", lambda **kwargs: FakeAsyncClient(response=response)
+    )
+
+    with pytest.raises(ai.AIConnectionError):
+        asyncio.run(ai.call_openrouter([{"role": "user", "content": "2 + 2?"}]))
+
+
 def test_call_openrouter_raises_on_network_error(monkeypatch):
     monkeypatch.setattr(
         ai.httpx,

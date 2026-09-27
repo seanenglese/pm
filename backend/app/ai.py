@@ -59,8 +59,17 @@ async def call_openrouter(
             f"OpenRouter request failed: {response.status_code} {response.text}"
         )
 
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+    # OpenRouter can answer 200 with an error body (e.g. an upstream provider
+    # failure) or with null content, so a 200 alone doesn't mean we got a reply.
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError) as error:
+        raise AIConnectionError(
+            f"OpenRouter returned an unexpected response: {response.text}"
+        ) from error
+    if not isinstance(content, str):
+        raise AIConnectionError("OpenRouter returned no message content")
+    return content
 
 
 async def ask_about_board(

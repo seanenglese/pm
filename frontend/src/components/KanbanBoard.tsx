@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -57,8 +57,6 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
       activationConstraint: { distance: 6 },
     })
   );
-
-  const cardsById = useMemo(() => board?.cards ?? {}, [board]);
 
   // Saves run one at a time so they can't land out of order. Edits made while
   // a save is in flight collapse into a single follow-up save of the newest board.
@@ -177,7 +175,7 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
     }
   };
 
-  const activeCard = activeCardId ? cardsById[activeCardId] : null;
+  const activeCard = activeCardId ? board?.cards[activeCardId] : null;
 
   if (status === "loading") {
     return (

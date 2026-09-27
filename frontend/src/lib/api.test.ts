@@ -19,6 +19,18 @@ describe("fetchBoard", () => {
     expect(board).toEqual(initialData);
   });
 
+  it("encodes the username in the URL", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ username: "a/b c", board: initialData }),
+    })) as unknown as typeof fetch;
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchBoard("a/b c");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/users/a%2Fb%20c/board");
+  });
+
   it("throws when the response is not ok", async () => {
     vi.stubGlobal(
       "fetch",

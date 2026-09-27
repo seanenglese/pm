@@ -16,7 +16,7 @@ type ChatResponse = {
 };
 
 export const fetchBoard = async (username: string): Promise<BoardData> => {
-  const response = await fetch(`/api/users/${username}/board`);
+  const response = await fetch(`/api/users/${encodeURIComponent(username)}/board`);
   if (!response.ok) {
     throw new Error(`Failed to load board (status ${response.status})`);
   }
@@ -29,7 +29,7 @@ export const sendChatMessage = async (
   message: string,
   history: ChatMessage[]
 ): Promise<ChatResponse> => {
-  const response = await fetch(`/api/users/${username}/chat`, {
+  const response = await fetch(`/api/users/${encodeURIComponent(username)}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history }),
@@ -44,7 +44,7 @@ export const saveBoard = async (
   username: string,
   board: BoardData
 ): Promise<BoardData> => {
-  const response = await fetch(`/api/users/${username}/board`, {
+  const response = await fetch(`/api/users/${encodeURIComponent(username)}/board`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(board),
