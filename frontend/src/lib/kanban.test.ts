@@ -1,6 +1,11 @@
 import {
+  NO_FILTERS,
+  boardLabels,
+  cardMatches,
   createId,
   dueStatus,
+  hasFilters,
+  initialData,
   formatDueDate,
   moveCard,
   moveColumn,
@@ -8,6 +13,8 @@ import {
   removeColumn,
   todayIso,
   type BoardData,
+  type Card,
+  type CardFilters,
   type Column,
 } from "@/lib/kanban";
 
@@ -139,5 +146,86 @@ describe("removeColumn", () => {
 
   it("ignores an unknown column", () => {
     expect(removeColumn(board, "missing")).toBe(board);
+  });
+});
+
+describe("cardMatches", () => {
+  const TODAY = "2026-10-04";
+  const make = (fields: Partial<Card>): Card => ({
+    id: "card-x",
+    title: "Write launch post",
+    details: "Draft for the blog",
+    priority: null,
+    dueDate: null,
+    labels: [],
+    ...fields,
+  });
+  const matches = (card: Card, filters: Partial<CardFilters>) =>
+    cardMatches(card, { ...NO_FILTERS, ...filters }, TODAY);
+
+  it("matches everything with no filters", () => {
+    expect(matches(make({}), {})).toBe(true);
+    expect(hasFilters(NO_FILTERS)).toBe(false);
+    expect(hasFilters({ ...NO_FILTERS, query: "   " })).toBe(false);
+    expect(hasFilters({ ...NO_FILTERS, due: "none" })).toBe(true);
+  });
+
+  it("searches title, details, and labels, ignoring case and spaces", () => {
+    const card = make({ labels: ["Marketing"] });
+    expect(matches(card, { query: " LAUNCH " })).toBe(true);
+    expect(matches(card, { query: "blog" })).toBe(true);
+    expect(matches(card, { query: "market" })).toBe(true);
+    expect(matches(card, { query: "invoice" })).toBe(false);
+  });
+
+  it("filters by priority, including cards without one", () => {
+    expect(matches(make({ priority: "high" }), { priority: "high" })).toBe(true);
+    expect(matches(make({ priority: "low" }), { priority: "high" })).toBe(false);
+    expect(matches(make({}), { priority: "none" })).toBe(true);
+    expect(matches(make({ priority: "low" }), { priority: "none" })).toBe(false);
+  });
+
+  it("filters by label", () => {
+    expect(matches(make({ labels: ["qa", "ops"] }), { label: "ops" })).toBe(true);
+    expect(matches(make({ labels: ["qa"] }), { label: "ops" })).toBe(false);
+  });
+
+  it.each([
+    ["overdue", "2026-10-03", true],
+    ["overdue", "2026-10-04", false],
+    ["today", "2026-10-04", true],
+    ["today", "2026-10-05", false],
+    ["week", "2026-10-04", true],
+    ["week", "2026-10-10", true],
+    ["week", "2026-10-11", false],
+    ["week", "2026-10-01", false],
+    ["week", null, false],
+    ["none", null, true],
+    ["none", "2026-10-04", false],
+  ] as const)("due filter %s with due date %s matches: %s", (due, dueDate, expected) => {
+    expect(matches(make({ dueDate }), { due })).toBe(expected);
+  });
+
+  it("handles a week that crosses a month boundary", () => {
+    expect(cardMatches(make({ dueDate: "2026-11-05" }), { ...NO_FILTERS, due: "week" }, "2026-10-30")).toBe(true);
+  });
+
+  it("requires every active filter to match", () => {
+    const card = make({ priority: "high", labels: ["ops"], dueDate: "2026-10-04" });
+    expect(matches(card, { query: "launch", priority: "high", label: "ops", due: "today" })).toBe(true);
+    expect(matches(card, { query: "launch", priority: "low", label: "ops", due: "today" })).toBe(false);
+  });
+});
+
+describe("boardLabels", () => {
+  it("lists each label once, sorted", () => {
+    expect(boardLabels(initialData)).toEqual([
+      "content",
+      "design",
+      "marketing",
+      "planning",
+      "qa",
+      "research",
+    ]);
   });
 });

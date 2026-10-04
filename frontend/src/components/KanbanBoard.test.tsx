@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import type { BoardData } from "@/lib/kanban";
+import { initialData, type BoardData } from "@/lib/kanban";
 import { holdRequests, installFakeApi, type ChatHandler, type FakeApi } from "@/test/fakeApi";
 
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
@@ -495,5 +495,111 @@ describe("KanbanBoard assistant panel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Show assistant" }));
 
     expect(screen.getByText("You said: hello")).toBeInTheDocument();
+  });
+});
+
+describe("KanbanBoard search and filters", () => {
+  const shownTitles = () =>
+    screen.getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent);
+
+  it("searches card text and shows how many cards match", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+
+    await userEvent.type(screen.getByLabelText("Search cards"), "roadmap");
+
+    expect(shownTitles()).toEqual(["Align roadmap themes"]);
+    expect(screen.getByText("Showing 1 of 8 cards")).toBeInTheDocument();
+    expect(within(getFirstColumn()).getByText("1 of 2 cards")).toBeInTheDocument();
+    expect(screen.getAllByText("No matching cards")).toHaveLength(4);
+    expect(api.calls((_url, method) => method === "PUT")).toHaveLength(0);
+  });
+
+  it("filters by priority, label, and due date together", async () => {
+    const api = setup();
+    api.boards[0].board = {
+      ...initialData,
+      cards: {
+        ...initialData.cards,
+        "card-5": { ...initialData.cards["card-5"], dueDate: "2020-01-01" },
+      },
+    };
+    renderBoard();
+    await waitForBoard();
+
+    await userEvent.selectOptions(screen.getByLabelText("Filter by priority"), "high");
+    expect(shownTitles()).toEqual(["Align roadmap themes", "Design card layout"]);
+
+    await userEvent.selectOptions(screen.getByLabelText("Filter by label"), "design");
+    expect(shownTitles()).toEqual(["Design card layout"]);
+
+    await userEvent.selectOptions(screen.getByLabelText("Filter by due date"), "overdue");
+    expect(shownTitles()).toEqual(["Design card layout"]);
+
+    await userEvent.selectOptions(screen.getByLabelText("Filter by due date"), "none");
+    expect(screen.queryAllByRole("heading", { level: 4 })).toHaveLength(0);
+    expect(screen.getByText("Showing 0 of 8 cards")).toBeInTheDocument();
+  });
+
+  it("offers every label on the board in the label filter", async () => {
+    setup();
+    renderBoard();
+    await waitForBoard();
+
+    const options = within(screen.getByLabelText("Filter by label"))
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(options).toEqual([
+      "Any label",
+      "content",
+      "design",
+      "marketing",
+      "planning",
+      "qa",
+      "research",
+    ]);
+  });
+
+  it("clears every filter at once", async () => {
+    setup();
+    renderBoard();
+    await waitForBoard();
+    await userEvent.type(screen.getByLabelText("Search cards"), "zzz");
+    await userEvent.selectOptions(screen.getByLabelText("Filter by priority"), "none");
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(screen.getByLabelText("Search cards")).toHaveValue("");
+    expect(screen.getByLabelText("Filter by priority")).toHaveValue("");
+    expect(shownTitles()).toHaveLength(8);
+    expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a chosen label selectable after its last card loses it", async () => {
+    setup();
+    renderBoard();
+    await waitForBoard();
+    await userEvent.selectOptions(screen.getByLabelText("Filter by label"), "qa");
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit QA micro-interactions" }));
+    await userEvent.clear(screen.getByLabelText("Labels"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByLabelText("Filter by label")).toHaveValue("qa");
+    expect(screen.queryAllByRole("heading", { level: 4 })).toHaveLength(0);
+  });
+
+  it("still edits the full board while filtered", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+    await userEvent.type(screen.getByLabelText("Search cards"), "roadmap");
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete Align roadmap themes" }));
+
+    await waitFor(() => expect(Object.keys(api.boards[0].board.cards)).toHaveLength(7));
+    expect(api.boards[0].board.columns[0].cardIds).toEqual(["card-2"]);
   });
 });

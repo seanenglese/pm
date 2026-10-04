@@ -66,6 +66,17 @@ Every change is saved automatically. There's no save button, and your board stay
 
 To start over completely, stop the app and delete `backend/data/pm_mvp.db`. This deletes every account and board; the database is recreated, with just the demo account, the next time the app starts.
 
+## Finding cards
+
+The bar above the columns narrows the board down to the cards you care about:
+
+- **Search cards**: type any word from a card's title, details, or labels.
+- **Priority**: show only High, Medium, or Low cards, or cards with no priority.
+- **Label**: show only cards with a particular label.
+- **Due date**: show cards that are overdue, due today, due in the next 7 days, or have no due date.
+
+Filters can be combined. While any filter is on, the bar shows how many cards match ("Showing 3 of 8 cards"), each column shows how many of its cards match, and **Clear filters** turns them all off. Filtering only changes what you see: hidden cards are not removed, and you can still edit, move, and delete the cards that are shown. Filters reset when you switch boards or reload the page.
+
 ## The AI assistant
 
 The **Board Assistant** panel sits to the right of the board (below it in a narrow window). To make room for more columns, click **Hide assistant** above the board; click **Show assistant** to bring it back. Your conversation is kept while it is hidden, and the app remembers your choice. Type a message and click **Send**, or press Enter. While the assistant is working you'll see "Thinking...", and both the message box and the board are locked (the board dims) until it replies, so a change you make can't be overwritten by the assistant's answer.

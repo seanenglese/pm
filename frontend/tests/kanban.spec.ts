@@ -152,6 +152,25 @@ test("hiding the assistant makes room for more columns", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Show assistant" })).toBeVisible();
 });
 
+test("cards can be searched and filtered", async ({ page }) => {
+  await registerNewUser(page);
+  const cards = page.locator('[data-testid^="card-"]');
+  await expect(cards).toHaveCount(8);
+
+  await page.getByLabel("Search cards").fill("customer");
+  await expect(cards).toHaveCount(1);
+  await expect(page.getByText("Showing 1 of 8 cards")).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByLabel("Filter by label").selectOption("design");
+  await page.getByLabel("Filter by priority").selectOption("high");
+  await expect(cards).toHaveCount(1);
+  await expect(page.getByTestId("card-card-5")).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(cards).toHaveCount(8);
+});
+
 test("a dragged card stays in its new column after a reload", async ({ page }) => {
   await registerNewUser(page);
   const card = page.getByTestId("card-card-1");

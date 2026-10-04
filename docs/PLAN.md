@@ -94,7 +94,7 @@ Goal: grow the MVP into a fuller project management app (real accounts, multiple
 - [x] Iteration 1: real accounts and multiple boards
 - [x] Iteration 2: card editing and richer cards (edit title/details in place, priority, due date, labels), with the AI schema extended to match
 - [x] Iteration 3: column management (add, delete, reorder columns) and a collapsible assistant panel so more columns fit on screen
-- [ ] Iteration 4: search and filtering on a board (text, priority, label, due/overdue)
+- [x] Iteration 4: search and filtering on a board (text, priority, label, due/overdue)
 - [ ] Iteration 5: account settings UI (change password, delete account)
 - [ ] Later candidates: board sharing with other users, card comments/activity history, a cross-board overview, persisted chat history
 
@@ -127,6 +127,15 @@ Goal: grow the MVP into a fuller project management app (real accounts, multiple
 - Pure helpers `moveColumn` and `removeColumn` in `lib/kanban.ts`; reordering uses buttons rather than drag-and-drop, which keeps it keyboard accessible and out of the way of card dragging
 - **Hide assistant** / **Show assistant** in the board header; the choice is remembered in `localStorage` (`pm-assistant`), and the conversation survives hiding the panel. With it hidden, four columns fit at 1280px instead of three
 - Tests: frontend 89 unit tests (97% line coverage); e2e adds column add/rename/reorder/delete with a reload, and a check that hiding the assistant brings the fourth column fully into view (14 e2e tests in all). That check compares the column's right edge with its scroll container's, because a column's own box doesn't move when the container clips it, and the columns are taller than the 720px test viewport, so area-based viewport checks can't be used
+
+### Iteration 4: search and filtering (complete)
+
+- Frontend only: filtering runs over the board already in memory, so there is no new endpoint and saved data is untouched (filtering never triggers a save)
+- `FilterBar` above the columns: text search (title, details, and labels; case-insensitive), priority (any / high / medium / low / none), label (every label on the board), and due date (any / overdue / due today / due in the next 7 days / no due date). Filters combine; **Clear filters** and a "Showing N of M cards" count appear while any filter is active
+- Columns show only matching cards, with "N of M cards" in the header and "No matching cards" when a column has cards but none match. Editing, deleting, and dragging still work on the full board while filtered
+- Filters live in `KanbanBoard` state, so they reset when you switch boards or reload
+- Pure helpers in `lib/kanban.ts`: `cardMatches`, `hasFilters`, `boardLabels`, `NO_FILTERS` (the "next 7 days" window is computed with local calendar dates, tested across a month boundary)
+- Tests: frontend 113 unit tests (97% line coverage), e2e 15 (adds search plus combined label/priority filtering on the real stack)
 
 ## Possible future work
 

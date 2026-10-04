@@ -7,7 +7,9 @@ import { NewCardForm } from "@/components/NewCardForm";
 
 type KanbanColumnProps = {
   column: Column;
+  /** The cards to show: all of the column's cards, or the ones matching the filters. */
   cards: Card[];
+  isFiltered: boolean;
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
   onEditCard: (cardId: string) => void;
@@ -24,6 +26,7 @@ const controlClass =
 export const KanbanColumn = ({
   column,
   cards,
+  isFiltered,
   onRename,
   onAddCard,
   onEditCard,
@@ -49,7 +52,8 @@ export const KanbanColumn = ({
           <div className="flex items-center gap-3">
             <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} {cards.length === 1 ? "card" : "cards"}
+              {isFiltered ? `${cards.length} of ` : ""}
+              {column.cardIds.length} {column.cardIds.length === 1 ? "card" : "cards"}
             </span>
             <div className="ml-auto flex items-center">
               <button
@@ -89,7 +93,7 @@ export const KanbanColumn = ({
         </div>
       </div>
       <div className="mt-4 flex flex-1 flex-col gap-3">
-        <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
+        <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
           {cards.map((card) => (
             <KanbanCard
               key={card.id}
@@ -101,7 +105,7 @@ export const KanbanColumn = ({
         </SortableContext>
         {cards.length === 0 && (
           <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[var(--stroke)] px-3 py-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-            Drop a card here
+            {isFiltered && column.cardIds.length > 0 ? "No matching cards" : "Drop a card here"}
           </div>
         )}
       </div>

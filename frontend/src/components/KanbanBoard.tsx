@@ -13,14 +13,20 @@ import {
 } from "@dnd-kit/core";
 import { CardEditor } from "@/components/CardEditor";
 import { ChatSidebar } from "@/components/ChatSidebar";
+import { FilterBar } from "@/components/FilterBar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { fetchBoard, saveBoard, sendChatMessage, type ChatMessage } from "@/lib/api";
 import {
+  NO_FILTERS,
+  boardLabels,
+  cardMatches,
   createId,
+  hasFilters,
   moveCard,
   moveColumn,
   removeColumn,
+  todayIso,
   type BoardData,
   type Card,
 } from "@/lib/kanban";
@@ -51,6 +57,7 @@ export const KanbanBoard = ({
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(boardName);
+  const [filters, setFilters] = useState(NO_FILTERS);
   const [isAssistantOpen, setIsAssistantOpen] = useState(
     () => localStorage.getItem(ASSISTANT_KEY) !== "hidden"
   );
@@ -280,6 +287,16 @@ export const KanbanBoard = ({
   }
 
   const cardCount = Object.keys(board.cards).length;
+  const isFiltered = hasFilters(filters);
+  const today = todayIso();
+  const visibleCards = (cardIds: string[]) =>
+    cardIds
+      .map((cardId) => board.cards[cardId])
+      .filter((card) => !isFiltered || cardMatches(card, filters, today));
+  const shownCount = board.columns.reduce(
+    (total, column) => total + visibleCards(column.cardIds).length,
+    0
+  );
 
   return (
     <main className="mx-auto flex max-w-[1500px] flex-col gap-6 px-6 pb-16 pt-8">
@@ -320,6 +337,13 @@ export const KanbanBoard = ({
           </button>
         </div>
       </header>
+      <FilterBar
+        filters={filters}
+        labels={boardLabels(board)}
+        shown={shownCount}
+        total={cardCount}
+        onChange={setFilters}
+      />
       {saveError ? (
         <p role="alert" className="text-sm font-medium text-red-600">
           {saveError}
@@ -344,7 +368,8 @@ export const KanbanBoard = ({
                 <KanbanColumn
                   key={column.id}
                   column={column}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                  cards={visibleCards(column.cardIds)}
+                  isFiltered={isFiltered}
                   onRename={handleRenameColumn}
                   onAddCard={handleAddCard}
                   onEditCard={setEditingCardId}

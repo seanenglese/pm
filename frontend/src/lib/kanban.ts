@@ -271,3 +271,62 @@ export const removeColumn = (board: BoardData, columnId: string): BoardData => {
     ),
   };
 };
+
+export type DueFilter = "" | "overdue" | "today" | "week" | "none";
+
+export type CardFilters = {
+  query: string;
+  /** "" means any priority, "none" means cards without one. */
+  priority: Priority | "" | "none";
+  /** "" means any label. */
+  label: string;
+  due: DueFilter;
+};
+
+export const NO_FILTERS: CardFilters = { query: "", priority: "", label: "", due: "" };
+
+export const hasFilters = (filters: CardFilters) =>
+  Boolean(filters.query.trim() || filters.priority || filters.label || filters.due);
+
+const addDays = (isoDate: string, days: number) => {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return todayIso(new Date(year, month - 1, day + days));
+};
+
+const matchesDue = (dueDate: string | null, due: DueFilter, today: string) => {
+  const status = dueStatus(dueDate, today);
+  switch (due) {
+    case "":
+      return true;
+    case "none":
+      return status === null;
+    case "week":
+      // Today through the next six days.
+      return status !== null && status !== "overdue" && dueDate! <= addDays(today, 6);
+    default:
+      return status === due;
+  }
+};
+
+export const cardMatches = (card: Card, filters: CardFilters, today: string) => {
+  const query = filters.query.trim().toLowerCase();
+  if (
+    query &&
+    ![card.title, card.details, ...card.labels].some((text) => text.toLowerCase().includes(query))
+  ) {
+    return false;
+  }
+  if (filters.priority && (card.priority ?? "none") !== filters.priority) {
+    return false;
+  }
+  if (filters.label && !card.labels.includes(filters.label)) {
+    return false;
+  }
+  return matchesDue(card.dueDate, filters.due, today);
+};
+
+/** Every label used on the board, sorted, for the label filter. */
+export const boardLabels = (board: BoardData) =>
+  [...new Set(Object.values(board.cards).flatMap((card) => card.labels))].sort((a, b) =>
+    a.localeCompare(b)
+  );
