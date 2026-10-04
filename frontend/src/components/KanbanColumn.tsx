@@ -12,7 +12,14 @@ type KanbanColumnProps = {
   onAddCard: (columnId: string, title: string, details: string) => void;
   onEditCard: (cardId: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
+  onMove: (columnId: string, direction: -1 | 1) => void;
+  onDelete: (columnId: string) => void;
+  isFirst: boolean;
+  isLast: boolean;
 };
+
+const controlClass =
+  "rounded-full px-2 py-0.5 text-xs font-semibold text-[var(--gray-text)] transition hover:bg-[var(--surface)] hover:text-[var(--navy-dark)] disabled:pointer-events-none disabled:opacity-30";
 
 export const KanbanColumn = ({
   column,
@@ -21,6 +28,10 @@ export const KanbanColumn = ({
   onAddCard,
   onEditCard,
   onDeleteCard,
+  onMove,
+  onDelete,
+  isFirst,
+  isLast,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -38,8 +49,36 @@ export const KanbanColumn = ({
           <div className="flex items-center gap-3">
             <div className="h-2 w-10 rounded-full bg-[var(--accent-yellow)]" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              {cards.length} cards
+              {cards.length} {cards.length === 1 ? "card" : "cards"}
             </span>
+            <div className="ml-auto flex items-center">
+              <button
+                type="button"
+                onClick={() => onMove(column.id, -1)}
+                disabled={isFirst}
+                aria-label={`Move ${column.title} left`}
+                className={controlClass}
+              >
+                &lsaquo;
+              </button>
+              <button
+                type="button"
+                onClick={() => onMove(column.id, 1)}
+                disabled={isLast}
+                aria-label={`Move ${column.title} right`}
+                className={controlClass}
+              >
+                &rsaquo;
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(column.id)}
+                aria-label={`Delete column ${column.title}`}
+                className={clsx(controlClass, "hover:text-red-600")}
+              >
+                Delete
+              </button>
+            </div>
           </div>
           <input
             value={column.title}

@@ -113,6 +113,45 @@ test("editing a card's priority, due date, and labels is saved", async ({ page }
   await expect(saved.getByText("interviews")).toBeVisible();
 });
 
+test("columns can be added, renamed, reordered, and deleted", async ({ page }) => {
+  await registerNewUser(page);
+  const titles = () => page.getByLabel("Column title");
+
+  await page.getByRole("button", { name: "Add column" }).click();
+  await expect(titles()).toHaveCount(6);
+  await titles().last().fill("Blocked");
+  await page.getByRole("button", { name: "Move Blocked left" }).click();
+  await expect(titles().nth(4)).toHaveValue("Blocked");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete column Discovery" }).click();
+  await expect(titles()).toHaveCount(5);
+
+  await page.reload();
+  await expect(titles()).toHaveCount(5);
+  await expect(titles().nth(3)).toHaveValue("Blocked");
+  await expect(page.getByText("Prototype analytics view")).toHaveCount(0);
+});
+
+test("hiding the assistant makes room for more columns", async ({ page }) => {
+  await registerNewUser(page);
+  // Columns sit in a horizontal scroll area; a column is fully shown when it ends
+  // inside that area. (Viewport checks don't work: columns are taller than the window.)
+  const reviewFitsOnScreen = () =>
+    page.getByTestId("column-col-review").evaluate((column) => {
+      const area = column.parentElement!.getBoundingClientRect();
+      return column.getBoundingClientRect().right <= area.right;
+    });
+  expect(await reviewFitsOnScreen()).toBe(false);
+
+  await page.getByRole("button", { name: "Hide assistant" }).click();
+
+  await expect(page.getByLabel("Chat message")).toHaveCount(0);
+  await expect.poll(reviewFitsOnScreen).toBe(true);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Show assistant" })).toBeVisible();
+});
+
 test("a dragged card stays in its new column after a reload", async ({ page }) => {
   await registerNewUser(page);
   const card = page.getByTestId("card-card-1");

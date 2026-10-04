@@ -3,8 +3,11 @@ import {
   dueStatus,
   formatDueDate,
   moveCard,
+  moveColumn,
   parseLabels,
+  removeColumn,
   todayIso,
+  type BoardData,
   type Column,
 } from "@/lib/kanban";
 
@@ -87,5 +90,54 @@ describe("due dates", () => {
 
   it("formats a due date for display without shifting the day", () => {
     expect(formatDueDate("2026-11-05")).toBe("Nov 5, 2026");
+  });
+});
+
+describe("moveColumn", () => {
+  const columns: Column[] = [
+    { id: "col-a", title: "A", cardIds: [] },
+    { id: "col-b", title: "B", cardIds: [] },
+    { id: "col-c", title: "C", cardIds: [] },
+  ];
+  const order = (result: Column[]) => result.map((column) => column.id);
+
+  it("moves a column left or right", () => {
+    expect(order(moveColumn(columns, "col-b", -1))).toEqual(["col-b", "col-a", "col-c"]);
+    expect(order(moveColumn(columns, "col-b", 1))).toEqual(["col-a", "col-c", "col-b"]);
+  });
+
+  it("does nothing past either end or for an unknown column", () => {
+    expect(moveColumn(columns, "col-a", -1)).toBe(columns);
+    expect(moveColumn(columns, "col-c", 1)).toBe(columns);
+    expect(moveColumn(columns, "missing", 1)).toBe(columns);
+  });
+});
+
+describe("removeColumn", () => {
+  const card = (id: string) => ({
+    id,
+    title: id,
+    details: "",
+    priority: null,
+    dueDate: null,
+    labels: [],
+  });
+  const board: BoardData = {
+    columns: [
+      { id: "col-a", title: "A", cardIds: ["card-1", "card-2"] },
+      { id: "col-b", title: "B", cardIds: ["card-3"] },
+    ],
+    cards: { "card-1": card("card-1"), "card-2": card("card-2"), "card-3": card("card-3") },
+  };
+
+  it("removes the column and only its cards", () => {
+    const result = removeColumn(board, "col-a");
+
+    expect(result.columns.map((column) => column.id)).toEqual(["col-b"]);
+    expect(Object.keys(result.cards)).toEqual(["card-3"]);
+  });
+
+  it("ignores an unknown column", () => {
+    expect(removeColumn(board, "missing")).toBe(board);
   });
 });

@@ -52,6 +52,9 @@ If you delete your last board, the page shows "No boards yet" until you create a
 The line under the board name shows how many columns and cards it has. Each column shows how many cards it holds. If a board has more columns than fit on screen, scroll the columns sideways.
 
 - **Rename a column**: click a column's title and type a new name. The change is saved as you type.
+- **Add a column**: click **Add column** after the last column. It's called "New column" until you rename it.
+- **Reorder columns**: use the arrow buttons at the top of a column to move it left or right.
+- **Delete a column**: click **Delete** at the top of the column. If it has cards you'll be asked to confirm, and its cards are deleted with it.
 - **Add a card**: click **Add a card** at the bottom of a column, enter a title (required) and details (optional), then click **Add card**. Click **Cancel** to close the form without adding anything.
 - **Remove a card**: click **Remove** on a card. There is no confirmation and no undo, so remove carefully.
 - **Move a card**: drag a card and drop it in another column, or drop it on another card to reorder it within a column. An empty column shows "Drop a card here" as a drop target.
@@ -65,7 +68,7 @@ To start over completely, stop the app and delete `backend/data/pm_mvp.db`. This
 
 ## The AI assistant
 
-The **Board Assistant** panel sits to the right of the board (below it in a narrow window). Type a message and click **Send**, or press Enter. While the assistant is working you'll see "Thinking...", and both the message box and the board are locked (the board dims) until it replies, so a change you make can't be overwritten by the assistant's answer.
+The **Board Assistant** panel sits to the right of the board (below it in a narrow window). To make room for more columns, click **Hide assistant** above the board; click **Show assistant** to bring it back. Your conversation is kept while it is hidden, and the app remembers your choice. Type a message and click **Send**, or press Enter. While the assistant is working you'll see "Thinking...", and both the message box and the board are locked (the board dims) until it replies, so a change you make can't be overwritten by the assistant's answer.
 
 You can ask it questions, for example:
 

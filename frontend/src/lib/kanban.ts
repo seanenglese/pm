@@ -241,3 +241,33 @@ export const formatDueDate = (dueDate: string) => {
     year: "numeric",
   });
 };
+
+/** Swaps a column with its neighbour; a move past either end changes nothing. */
+export const moveColumn = (
+  columns: Column[],
+  columnId: string,
+  direction: -1 | 1
+): Column[] => {
+  const index = columns.findIndex((column) => column.id === columnId);
+  const target = index + direction;
+  if (index === -1 || target < 0 || target >= columns.length) {
+    return columns;
+  }
+  const next = [...columns];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+};
+
+/** Removes a column together with the cards in it. */
+export const removeColumn = (board: BoardData, columnId: string): BoardData => {
+  const column = board.columns.find((candidate) => candidate.id === columnId);
+  if (!column) {
+    return board;
+  }
+  return {
+    columns: board.columns.filter((candidate) => candidate.id !== columnId),
+    cards: Object.fromEntries(
+      Object.entries(board.cards).filter(([id]) => !column.cardIds.includes(id))
+    ),
+  };
+};

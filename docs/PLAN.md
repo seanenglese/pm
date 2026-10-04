@@ -93,7 +93,7 @@ Goal: grow the MVP into a fuller project management app (real accounts, multiple
 
 - [x] Iteration 1: real accounts and multiple boards
 - [x] Iteration 2: card editing and richer cards (edit title/details in place, priority, due date, labels), with the AI schema extended to match
-- [ ] Iteration 3: column management (add, delete, reorder columns) and a collapsible assistant panel so more columns fit on screen
+- [x] Iteration 3: column management (add, delete, reorder columns) and a collapsible assistant panel so more columns fit on screen
 - [ ] Iteration 4: search and filtering on a board (text, priority, label, due/overdue)
 - [ ] Iteration 5: account settings UI (change password, delete account)
 - [ ] Later candidates: board sharing with other users, card comments/activity history, a cross-board overview, persisted chat history
@@ -119,6 +119,14 @@ Goal: grow the MVP into a fuller project management app (real accounts, multiple
 - Pure helpers in `lib/kanban.ts`: `parseLabels`, `todayIso`, `dueStatus`, `formatDueDate`
 - Tests: backend 83 (99% coverage), frontend 78 unit tests (97% line coverage), plus an e2e test that edits a card on the real stack and checks it after a reload
 - Vitest `testTimeout` raised to 15s: interaction-heavy tests that take about 1.5s alone went past the 5s default when all files ran in parallel
+
+### Iteration 3: column management and a collapsible assistant (complete)
+
+- Frontend only: columns already lived in the board JSON, so the backend needed no change beyond telling the assistant it may change columns too
+- **Add column** (after the last column) creates "New column", renamed in place; each column header has move-left / move-right buttons (disabled at the ends) and **Delete**, which asks for confirmation only when the column holds cards and removes those cards with it
+- Pure helpers `moveColumn` and `removeColumn` in `lib/kanban.ts`; reordering uses buttons rather than drag-and-drop, which keeps it keyboard accessible and out of the way of card dragging
+- **Hide assistant** / **Show assistant** in the board header; the choice is remembered in `localStorage` (`pm-assistant`), and the conversation survives hiding the panel. With it hidden, four columns fit at 1280px instead of three
+- Tests: frontend 89 unit tests (97% line coverage); e2e adds column add/rename/reorder/delete with a reload, and a check that hiding the assistant brings the fourth column fully into view (14 e2e tests in all). That check compares the column's right edge with its scroll container's, because a column's own box doesn't move when the container clips it, and the columns are taller than the 720px test viewport, so area-based viewport checks can't be used
 
 ## Possible future work
 

@@ -16,7 +16,16 @@ import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { fetchBoard, saveBoard, sendChatMessage, type ChatMessage } from "@/lib/api";
-import { createId, moveCard, type BoardData, type Card } from "@/lib/kanban";
+import {
+  createId,
+  moveCard,
+  moveColumn,
+  removeColumn,
+  type BoardData,
+  type Card,
+} from "@/lib/kanban";
+
+const ASSISTANT_KEY = "pm-assistant";
 
 type KanbanBoardProps = {
   boardId: number;
@@ -42,6 +51,14 @@ export const KanbanBoard = ({
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState(boardName);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(
+    () => localStorage.getItem(ASSISTANT_KEY) !== "hidden"
+  );
+
+  const toggleAssistant = () => {
+    localStorage.setItem(ASSISTANT_KEY, isAssistantOpen ? "hidden" : "shown");
+    setIsAssistantOpen(!isAssistantOpen);
+  };
 
   const loadBoard = useCallback(() => {
     fetchBoard(boardId)
@@ -167,6 +184,31 @@ export const KanbanBoard = ({
     setEditingCardId(null);
   };
 
+  const handleAddColumn = () => {
+    updateBoard((prev) => ({
+      ...prev,
+      columns: [...prev.columns, { id: createId("col"), title: "New column", cardIds: [] }],
+    }));
+  };
+
+  const handleMoveColumn = (columnId: string, direction: -1 | 1) => {
+    updateBoard((prev) => ({ ...prev, columns: moveColumn(prev.columns, columnId, direction) }));
+  };
+
+  const handleDeleteColumn = (columnId: string) => {
+    const column = board?.columns.find((candidate) => candidate.id === columnId);
+    const count = column?.cardIds.length ?? 0;
+    if (
+      count > 0 &&
+      !window.confirm(
+        `Delete "${column?.title}" and its ${count} ${count === 1 ? "card" : "cards"}?`
+      )
+    ) {
+      return;
+    }
+    updateBoard((prev) => removeColumn(prev, columnId));
+  };
+
   const handleDeleteCard = (columnId: string, cardId: string) => {
     updateBoard((prev) => ({
       ...prev,
@@ -257,16 +299,26 @@ export const KanbanBoard = ({
             className="w-full bg-transparent font-display text-3xl font-semibold text-[var(--navy-dark)] outline-none focus:border-b-2 focus:border-[var(--accent-yellow)]"
           />
           <p className="mt-1 text-sm text-[var(--gray-text)]">
-            {board.columns.length} columns, {cardCount} {cardCount === 1 ? "card" : "cards"}
+            {board.columns.length} {board.columns.length === 1 ? "column" : "columns"}, {cardCount} {cardCount === 1 ? "card" : "cards"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onDeleteBoard}
-          className="rounded-full border border-[var(--stroke)] px-4 py-2 text-sm font-semibold text-[var(--gray-text)] transition hover:border-red-300 hover:text-red-600"
-        >
-          Delete board
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleAssistant}
+            aria-pressed={isAssistantOpen}
+            className="rounded-full border border-[var(--stroke)] px-4 py-2 text-sm font-semibold text-[var(--primary-blue)] transition hover:border-[var(--primary-blue)]"
+          >
+            {isAssistantOpen ? "Hide assistant" : "Show assistant"}
+          </button>
+          <button
+            type="button"
+            onClick={onDeleteBoard}
+            className="rounded-full border border-[var(--stroke)] px-4 py-2 text-sm font-semibold text-[var(--gray-text)] transition hover:border-red-300 hover:text-red-600"
+          >
+            Delete board
+          </button>
+        </div>
       </header>
       {saveError ? (
         <p role="alert" className="text-sm font-medium text-red-600">
@@ -288,7 +340,7 @@ export const KanbanBoard = ({
             className="min-w-0 flex-1 transition disabled:opacity-60"
           >
             <section className="flex gap-4 overflow-x-auto pb-4">
-              {board.columns.map((column) => (
+              {board.columns.map((column, index) => (
                 <KanbanColumn
                   key={column.id}
                   column={column}
@@ -297,8 +349,19 @@ export const KanbanBoard = ({
                   onAddCard={handleAddCard}
                   onEditCard={setEditingCardId}
                   onDeleteCard={handleDeleteCard}
+                  onMove={handleMoveColumn}
+                  onDelete={handleDeleteColumn}
+                  isFirst={index === 0}
+                  isLast={index === board.columns.length - 1}
                 />
               ))}
+              <button
+                type="button"
+                onClick={handleAddColumn}
+                className="h-12 w-[200px] shrink-0 rounded-3xl border border-dashed border-[var(--primary-blue)] text-sm font-semibold text-[var(--primary-blue)] transition hover:bg-white"
+              >
+                Add column
+              </button>
             </section>
           </fieldset>
           <DragOverlay>
@@ -310,12 +373,14 @@ export const KanbanBoard = ({
           </DragOverlay>
         </DndContext>
 
-        <ChatSidebar
-          history={chatHistory}
-          isLoading={isChatLoading}
-          error={chatError}
-          onSend={handleChatSend}
-        />
+        {isAssistantOpen ? (
+          <ChatSidebar
+            history={chatHistory}
+            isLoading={isChatLoading}
+            error={chatError}
+            onSend={handleChatSend}
+          />
+        ) : null}
       </div>
       {editingCard ? (
         <CardEditor

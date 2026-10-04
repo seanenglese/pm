@@ -385,3 +385,115 @@ describe("KanbanBoard card editing", () => {
     });
   });
 });
+
+describe("KanbanBoard column management", () => {
+  const columnTitles = () =>
+    screen.getAllByLabelText("Column title").map((input) => (input as HTMLInputElement).value);
+  const savedTitles = (api: FakeApi) => api.boards[0].board.columns.map((column) => column.title);
+
+  it("adds a column at the end and persists it", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+
+    await userEvent.click(screen.getByRole("button", { name: "Add column" }));
+
+    expect(columnTitles()).toHaveLength(6);
+    expect(columnTitles()[5]).toBe("New column");
+    expect(screen.getByText("6 columns, 8 cards")).toBeInTheDocument();
+    await waitFor(() => expect(savedTitles(api)[5]).toBe("New column"));
+  });
+
+  it("moves columns left and right, disabling the ends", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+
+    expect(screen.getByRole("button", { name: "Move Backlog left" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Done right" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Move Backlog right" }));
+    expect(columnTitles().slice(0, 2)).toEqual(["Discovery", "Backlog"]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Move Done left" }));
+    expect(columnTitles().slice(3)).toEqual(["Done", "Review"]);
+
+    await waitFor(() =>
+      expect(savedTitles(api)).toEqual(["Discovery", "Backlog", "In Progress", "Done", "Review"])
+    );
+  });
+
+  it("deletes an empty column without asking", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+    const confirm = vi.spyOn(window, "confirm");
+    await userEvent.click(screen.getByRole("button", { name: "Add column" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete column New column" }));
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(columnTitles()).toHaveLength(5);
+    await waitFor(() => expect(savedTitles(api)).toHaveLength(5));
+  });
+
+  it("asks before deleting a column with cards, then removes the cards too", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete column Backlog" }));
+
+    expect(confirm).toHaveBeenCalledWith('Delete "Backlog" and its 2 cards?');
+    expect(columnTitles()[0]).toBe("Discovery");
+    expect(screen.queryByText("Align roadmap themes")).not.toBeInTheDocument();
+    await waitFor(() => expect(Object.keys(api.boards[0].board.cards)).toHaveLength(6));
+  });
+
+  it("keeps the column when deletion is not confirmed", async () => {
+    const api = setup();
+    renderBoard();
+    await waitForBoard();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete column Discovery" }));
+
+    expect(columnTitles()).toHaveLength(5);
+    expect(api.calls((_url, method) => method === "PUT")).toHaveLength(0);
+  });
+});
+
+describe("KanbanBoard assistant panel", () => {
+  it("hides and shows the assistant, remembering the choice", async () => {
+    setup();
+    const { unmount } = renderBoard();
+    await waitForBoard();
+    expect(screen.getByLabelText("Chat message")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide assistant" }));
+    expect(screen.queryByLabelText("Chat message")).not.toBeInTheDocument();
+
+    unmount();
+    renderBoard();
+    await waitForBoard();
+    expect(screen.queryByLabelText("Chat message")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show assistant" }));
+    expect(screen.getByLabelText("Chat message")).toBeInTheDocument();
+  });
+
+  it("keeps the conversation when the panel is hidden and shown again", async () => {
+    setup((message) => ({ reply: `You said: ${message}` }));
+    renderBoard();
+    await waitForBoard();
+    await userEvent.type(screen.getByLabelText("Chat message"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(screen.getByText("You said: hello")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide assistant" }));
+    await userEvent.click(screen.getByRole("button", { name: "Show assistant" }));
+
+    expect(screen.getByText("You said: hello")).toBeInTheDocument();
+  });
+});
