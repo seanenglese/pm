@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import date
 
 import httpx
 from pydantic import BaseModel, ConfigDict
@@ -13,7 +14,10 @@ SYSTEM_PROMPT = (
     "You are an assistant embedded in a Kanban board app. You are given the "
     "current board as JSON: `columns` is an ordered list of "
     "{id, title, cardIds}, and `cards` is a map of card id to "
-    "{id, title, details}. Always write a short answer to the user's message "
+    "{id, title, details, priority, dueDate, labels}: `priority` is \"low\", "
+    "\"medium\", \"high\", or null; `dueDate` is an ISO date (YYYY-MM-DD) or "
+    "null; `labels` is a list of short tags. A new card needs a unique id "
+    "(e.g. \"card-\" plus a few random letters). Always write a short answer to the user's message "
     "in `reply`. If the user asks you to create, edit, move, or remove one or "
     "more cards, set `board_update` to the complete new board JSON with your "
     "changes applied, keeping every existing column and card you were not "
@@ -77,7 +81,11 @@ async def ask_about_board(
 ) -> AIBoardResponse:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "system", "content": f"Current board JSON:\n{json.dumps(board)}"},
+        {
+            "role": "system",
+            "content": f"Today is {date.today().isoformat()}. "
+            f"Current board JSON:\n{json.dumps(board)}",
+        },
         *history,
         {"role": "user", "content": message},
     ]

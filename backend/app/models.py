@@ -1,4 +1,9 @@
-from pydantic import BaseModel, ConfigDict, model_validator
+from datetime import date
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+
+Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
 
 
 class Card(BaseModel):
@@ -7,6 +12,10 @@ class Card(BaseModel):
     id: str
     title: str
     details: str
+    # Optional so boards saved before these fields existed still validate.
+    priority: Literal["low", "medium", "high"] | None = None
+    dueDate: date | None = None
+    labels: list[Label] = Field(default_factory=list, max_length=10)
 
 
 class Column(BaseModel):

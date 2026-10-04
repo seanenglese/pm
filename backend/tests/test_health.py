@@ -1,12 +1,10 @@
-import pytest
 from fastapi.testclient import TestClient
 
+from app import db
 from app.main import app
 
-client = TestClient(app)
 
-
-def test_health_check() -> None:
+def test_health_check(client) -> None:
     response = client.get("/api/health")
 
     assert response.status_code == 200
@@ -14,7 +12,7 @@ def test_health_check() -> None:
     assert response.json()["service"] == "pm-mvp"
 
 
-def test_root_serves_frontend_shell(tmp_path, monkeypatch) -> None:
+def test_root_serves_frontend_shell(client, tmp_path, monkeypatch) -> None:
     # The real static export only exists after a frontend build, so serve a stand-in.
     (tmp_path / "index.html").write_text("<title>Kanban Studio</title>")
     static = next(route.app for route in app.routes if getattr(route, "name", None) == "static")
@@ -27,136 +25,13 @@ def test_root_serves_frontend_shell(tmp_path, monkeypatch) -> None:
     assert "Kanban Studio" in response.text
 
 
-def test_user_board_is_created_with_default_data() -> None:
-    response = client.get("/api/users/user/board")
+def test_app_startup_initializes_database_and_demo_user(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "fresh" / "app.db")
 
-    assert response.status_code == 200
-    assert response.json()["username"] == "user"
-    assert response.json()["board"]["columns"]
-    assert response.json()["board"]["cards"]
-
-
-def test_user_board_can_be_updated() -> None:
-    board = {
-        "columns": [
-            {"id": "col-backlog", "title": "Backlog", "cardIds": ["card-1"]}
-        ],
-        "cards": {
-            "card-1": {
-                "id": "card-1",
-                "title": "Launch plan",
-                "details": "Finalize the release checklist.",
-            }
-        },
-    }
-
-    response = client.put("/api/users/user/board", json=board)
-
-    assert response.status_code == 200
-    assert response.json()["board"]["columns"][0]["title"] == "Backlog"
-    assert response.json()["board"]["cards"]["card-1"]["title"] == "Launch plan"
-
-    follow_up = client.get("/api/users/user/board")
-    assert follow_up.json()["board"]["cards"]["card-1"]["details"] == "Finalize the release checklist."
-
-
-def test_board_creation_is_idempotent_across_repeated_reads() -> None:
-    first = client.get("/api/users/new-user/board")
-    second = client.get("/api/users/new-user/board")
-
-    assert first.json()["board"] == second.json()["board"]
-
-
-def test_board_survives_multiple_consecutive_updates() -> None:
-    username = "repeat-updates-user"
-
-    def board_with_title(title: str) -> dict:
-        return {
-            "columns": [{"id": "col-a", "title": "A", "cardIds": ["card-1"]}],
-            "cards": {"card-1": {"id": "card-1", "title": title, "details": "pass"}},
-        }
-
-    for pass_number in range(1, 4):
-        response = client.put(
-            f"/api/users/{username}/board", json=board_with_title(f"Pass {pass_number}")
+    with TestClient(app) as started:
+        response = started.post(
+            "/api/auth/login", json={"username": "user", "password": "password"}
         )
-        assert response.json()["board"]["cards"]["card-1"]["title"] == f"Pass {pass_number}"
 
-    follow_up = client.get(f"/api/users/{username}/board")
-    assert follow_up.json()["board"]["cards"]["card-1"]["title"] == "Pass 3"
-
-
-def test_users_have_independent_boards() -> None:
-    board_a = {
-        "columns": [{"id": "col-a", "title": "Only A", "cardIds": []}],
-        "cards": {},
-    }
-
-    client.put("/api/users/user-a/board", json=board_a)
-    board_b = client.get("/api/users/user-b/board").json()["board"]
-
-    assert board_b["columns"][0]["title"] != "Only A"
-
-
-def test_board_update_rejects_invalid_payload() -> None:
-    response = client.put(
-        "/api/users/user/board",
-        json={"columns": [{"id": "col-a", "title": "A"}], "cards": {}},
-    )
-
-    assert response.status_code == 422
-
-
-CARD_K = {"id": "card-k", "title": "K", "details": "d"}
-
-
-@pytest.mark.parametrize(
-    "board",
-    [
-        pytest.param(
-            {
-                "columns": [{"id": "col-a", "title": "A", "cardIds": ["missing"]}],
-                "cards": {},
-            },
-            id="unknown-card-id",
-        ),
-        pytest.param(
-            {
-                "columns": [
-                    {"id": "col-a", "title": "A", "cardIds": ["card-k"]},
-                    {"id": "col-b", "title": "B", "cardIds": ["card-k"]},
-                ],
-                "cards": {"card-k": CARD_K},
-            },
-            id="card-in-two-columns",
-        ),
-        pytest.param(
-            {
-                "columns": [{"id": "col-a", "title": "A", "cardIds": ["card-k", "card-k"]}],
-                "cards": {"card-k": CARD_K},
-            },
-            id="card-twice-in-one-column",
-        ),
-        pytest.param(
-            {
-                "columns": [{"id": "col-a", "title": "A", "cardIds": ["other-key"]}],
-                "cards": {"other-key": CARD_K},
-            },
-            id="card-key-mismatch",
-        ),
-        pytest.param(
-            {
-                "columns": [
-                    {"id": "col-a", "title": "A", "cardIds": []},
-                    {"id": "col-a", "title": "A2", "cardIds": []},
-                ],
-                "cards": {},
-            },
-            id="duplicate-column-id",
-        ),
-    ],
-)
-def test_board_update_rejects_inconsistent_board(board) -> None:
-    response = client.put("/api/users/user/board", json=board)
-
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert (tmp_path / "fresh" / "app.db").exists()

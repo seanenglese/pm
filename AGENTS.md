@@ -3,19 +3,19 @@
 ## Business Requirements
 
 This project is building a Project Management App. Key features:
-- A user can sign in
-- When signed in, the user sees a Kanban board representing their project
-- The Kanban board has fixed columns that can be renamed
+- Anyone can create an account (username + password) and sign in; sessions survive a page reload
+- A signed-in user has any number of named Kanban boards, and can create, switch between, rename, and delete them
+- Board columns can be renamed
 - The cards on the Kanban board can be moved with drag and drop, and edited
-- There is an AI chat feature in a sidebar; the AI is able to create / edit / move one or more cards
+- There is an AI chat feature in a sidebar; the AI is able to create / edit / move one or more cards on the open board
+
+The MVP (one hardcoded user, one board) is complete; Phase 2 (see docs/PLAN.md) is growing it into a fuller project management app in iterations.
 
 ## Limitations
 
-For the MVP, there will only be a user sign in (hardcoded to 'user' and 'password') but the database will support multiple users for future.
+A demo account (`user` / `password`) is always available. Users' boards are private; there is no sharing yet.
 
-For the MVP, there will only be 1 Kanban board per signed in user.
-
-For the MVP, this will run locally (in a docker container)
+This runs locally (in a docker container)
 
 ## Technical Decisions
 
@@ -30,7 +30,7 @@ For the MVP, this will run locally (in a docker container)
 
 ## Starting Point
 
-All business requirements above are implemented and verified end-to-end (real Docker build, real SQLite persistence, real OpenRouter calls) — see docs/PLAN.md for the full status and what remains as possible future work beyond the original MVP scope.
+All business requirements above are implemented and tested, including Playwright integration tests against the real Docker image. docs/PLAN.md has the Phase 2 roadmap: check it for the next unfinished iteration and record progress there.
 
 ## Color Scheme
 

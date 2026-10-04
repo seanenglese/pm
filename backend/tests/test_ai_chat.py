@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date
 
 import pytest
 
@@ -112,3 +113,29 @@ def test_ask_about_board_raises_when_reply_missing(monkeypatch):
 
     with pytest.raises(AIConnectionError):
         asyncio.run(ask_about_board(SAMPLE_BOARD, "hi", []))
+
+
+def test_ask_about_board_tells_the_model_todays_date(monkeypatch):
+    captured = _mock_call_openrouter(monkeypatch, '{"reply": "ok", "board_update": null}')
+
+    asyncio.run(ask_about_board(SAMPLE_BOARD, "What is due soon?", []))
+
+    assert f"Today is {date.today().isoformat()}" in captured["messages"][1]["content"]
+    assert "dueDate" in captured["messages"][0]["content"]
+
+
+def test_ask_about_board_accepts_cards_with_priority_due_date_and_labels(monkeypatch):
+    card = {
+        "id": "card-1",
+        "title": "Existing",
+        "details": "Notes.",
+        "priority": "low",
+        "dueDate": "2026-11-02",
+        "labels": ["ops"],
+    }
+    updated = {"columns": SAMPLE_BOARD["columns"], "cards": {"card-1": card}}
+    _mock_call_openrouter(monkeypatch, json.dumps({"reply": "Set it", "board_update": updated}))
+
+    result = asyncio.run(ask_about_board(SAMPLE_BOARD, "Make it low priority", []))
+
+    assert result.board_update.model_dump(mode="json")["cards"]["card-1"] == card

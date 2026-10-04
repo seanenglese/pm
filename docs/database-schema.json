@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PM MVP Kanban Database Schema",
-  "description": "SQLite schema for the MVP project board, supporting multiple users with one board each.",
+  "title": "PM Kanban Database Schema",
+  "description": "SQLite schema: users with password hashes, bearer-token sessions, and any number of named boards per user.",
   "type": "object",
   "properties": {
     "users": {
@@ -9,11 +9,56 @@
       "items": {
         "type": "object",
         "properties": {
-          "id": { "type": "integer", "description": "Primary key" },
-          "username": { "type": "string", "description": "Login username; unique for each user" },
-          "created_at": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "integer",
+            "description": "Primary key"
+          },
+          "username": {
+            "type": "string",
+            "description": "Unique login name, 3-32 of [A-Za-z0-9_.-]"
+          },
+          "password_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "scrypt$<salt hex>$<hash hex>; null for migrated accounts that cannot sign in"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         },
-        "required": ["id", "username", "created_at"]
+        "required": [
+          "id",
+          "username",
+          "created_at"
+        ]
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "token_hash": {
+            "type": "string",
+            "description": "Primary key; SHA-256 hex of the bearer token"
+          },
+          "user_id": {
+            "type": "integer",
+            "description": "Foreign key to users.id (cascade delete)"
+          },
+          "expires_at": {
+            "type": "integer",
+            "description": "Unix time after which the session is invalid"
+          }
+        },
+        "required": [
+          "token_hash",
+          "user_id",
+          "expires_at"
+        ]
       }
     },
     "boards": {
@@ -21,7 +66,18 @@
       "items": {
         "type": "object",
         "properties": {
-          "user_id": { "type": "integer", "description": "Foreign key to users.id" },
+          "id": {
+            "type": "integer",
+            "description": "Primary key"
+          },
+          "user_id": {
+            "type": "integer",
+            "description": "Foreign key to users.id (cascade delete)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Board name, 1-80 characters"
+          },
           "board_json": {
             "type": "object",
             "description": "Serialized board state containing columns and cards",
@@ -31,11 +87,24 @@
                 "items": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "title": { "type": "string" },
-                    "cardIds": { "type": "array", "items": { "type": "string" } }
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "cardIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
                   },
-                  "required": ["id", "title", "cardIds"]
+                  "required": [
+                    "id",
+                    "title",
+                    "cardIds"
+                  ]
                 }
               },
               "cards": {
@@ -44,21 +113,83 @@
                 "additionalProperties": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "title": { "type": "string" },
-                    "details": { "type": "string" }
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        null
+                      ],
+                      "description": "Optional; defaults to null"
+                    },
+                    "dueDate": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date",
+                      "description": "Optional ISO date; defaults to null"
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 30
+                      },
+                      "maxItems": 10,
+                      "description": "Optional; defaults to []"
+                    }
                   },
-                  "required": ["id", "title", "details"]
+                  "required": [
+                    "id",
+                    "title",
+                    "details"
+                  ]
                 }
               }
             },
-            "required": ["columns", "cards"]
+            "required": [
+              "columns",
+              "cards"
+            ]
           },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         },
-        "required": ["user_id", "board_json", "updated_at"]
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "board_json",
+          "created_at",
+          "updated_at"
+        ]
       }
     }
   },
-  "required": ["users", "boards"]
+  "required": [
+    "users",
+    "sessions",
+    "boards"
+  ]
 }

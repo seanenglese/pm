@@ -11,37 +11,48 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { CardEditor } from "@/components/CardEditor";
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { fetchBoard, saveBoard, sendChatMessage, type ChatMessage } from "@/lib/api";
-import { createId, moveCard, type BoardData } from "@/lib/kanban";
+import { createId, moveCard, type BoardData, type Card } from "@/lib/kanban";
 
 type KanbanBoardProps = {
-  username: string;
+  boardId: number;
+  boardName: string;
+  onRenameBoard: (name: string) => void;
+  onDeleteBoard: () => void;
 };
 
 type LoadStatus = "loading" | "ready" | "error";
 
-export const KanbanBoard = ({ username }: KanbanBoardProps) => {
+export const KanbanBoard = ({
+  boardId,
+  boardName,
+  onRenameBoard,
+  onDeleteBoard,
+}: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState(boardName);
 
   const loadBoard = useCallback(() => {
-    fetchBoard(username)
+    fetchBoard(boardId)
       .then((loaded) => {
-        setBoard(loaded);
+        setBoard(loaded.board);
         setStatus("ready");
       })
       .catch(() => {
         setStatus("error");
       });
-  }, [username]);
+  }, [boardId]);
 
   useEffect(() => {
     loadBoard();
@@ -50,6 +61,15 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
   const handleRetry = () => {
     setStatus("loading");
     loadBoard();
+  };
+
+  const commitName = () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      setNameDraft(boardName);
+    } else if (trimmed !== boardName) {
+      onRenameBoard(trimmed);
+    }
   };
 
   const sensors = useSensors(
@@ -73,7 +93,7 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
         const toSave = unsavedBoard.current;
         unsavedBoard.current = null;
         try {
-          await saveBoard(username, toSave);
+          await saveBoard(boardId, toSave);
           setSaveError(null);
         } catch {
           setSaveError("Could not save your changes. Try again.");
@@ -125,7 +145,14 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
       ...prev,
       cards: {
         ...prev.cards,
-        [id]: { id, title, details: details || "No details yet." },
+        [id]: {
+          id,
+          title,
+          details: details || "No details yet.",
+          priority: null,
+          dueDate: null,
+          labels: [],
+        },
       },
       columns: prev.columns.map((column) =>
         column.id === columnId
@@ -133,6 +160,11 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
           : column
       ),
     }));
+  };
+
+  const handleUpdateCard = (card: Card) => {
+    updateBoard((prev) => ({ ...prev, cards: { ...prev.cards, [card.id]: card } }));
+    setEditingCardId(null);
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
@@ -162,7 +194,7 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
       // The assistant reads the board from the server, so let pending edits land first.
       await activeSave.current;
       const { reply, board: updatedBoard } = await sendChatMessage(
-        username,
+        boardId,
         message,
         historyBeforeSend
       );
@@ -176,10 +208,11 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
   };
 
   const activeCard = activeCardId ? board?.cards[activeCardId] : null;
+  const editingCard = editingCardId ? board?.cards[editingCardId] : null;
 
   if (status === "loading") {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <main className="flex justify-center py-24">
         <p className="text-sm font-semibold text-[var(--gray-text)]">
           Loading your board...
         </p>
@@ -189,7 +222,7 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
 
   if (status === "error" || !board) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <main className="flex flex-col items-center justify-center gap-4 py-24">
         <p className="text-sm font-semibold text-[var(--gray-text)]">
           Could not load your board.
         </p>
@@ -204,96 +237,93 @@ export const KanbanBoard = ({ username }: KanbanBoardProps) => {
     );
   }
 
+  const cardCount = Object.keys(board.cards).length;
+
   return (
-    <div className="relative overflow-hidden">
-      <div className="pointer-events-none absolute left-0 top-0 h-[420px] w-[420px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.25)_0%,_rgba(32,157,215,0.05)_55%,_transparent_70%)]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-[520px] w-[520px] translate-x-1/4 translate-y-1/4 rounded-full bg-[radial-gradient(circle,_rgba(117,57,145,0.18)_0%,_rgba(117,57,145,0.05)_55%,_transparent_75%)]" />
-
-      <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-10 px-6 pb-16 pt-12">
-        <header className="flex flex-col gap-6 rounded-[32px] border border-[var(--stroke)] bg-white/80 p-8 shadow-[var(--shadow)] backdrop-blur">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
-                Single Board Kanban
-              </p>
-              <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
-                Kanban Studio
-              </h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--gray-text)]">
-                Keep momentum visible. Rename columns, drag cards between stages,
-                and capture quick notes without getting buried in settings.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                Focus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                One board. Five columns. Zero clutter.
-              </p>
-            </div>
-          </div>
-          {saveError ? (
-            <p role="alert" className="text-sm font-medium text-red-600">
-              {saveError}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-4">
-            {board.columns.map((column) => (
-              <div
-                key={column.id}
-                className="flex items-center gap-2 rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--navy-dark)]"
-              >
-                <span className="h-2 w-2 rounded-full bg-[var(--accent-yellow)]" />
-                {column.title}
-              </div>
-            ))}
-          </div>
-        </header>
-
-        <div className="flex flex-col gap-6 lg:flex-row">
-          <DndContext
-            sensors={isChatLoading ? [] : sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            {/* The board is read-only while the assistant works, so its reply can't overwrite an edit. */}
-            <fieldset
-              disabled={isChatLoading}
-              aria-label="Board"
-              className="min-w-0 flex-1 transition disabled:opacity-60"
-            >
-              <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-                {board.columns.map((column) => (
-                  <KanbanColumn
-                    key={column.id}
-                    column={column}
-                    cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                    onRename={handleRenameColumn}
-                    onAddCard={handleAddCard}
-                    onDeleteCard={handleDeleteCard}
-                  />
-                ))}
-              </section>
-            </fieldset>
-            <DragOverlay>
-              {activeCard ? (
-                <div className="w-[260px]">
-                  <KanbanCardPreview card={activeCard} />
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-
-          <ChatSidebar
-            history={chatHistory}
-            isLoading={isChatLoading}
-            error={chatError}
-            onSend={handleChatSend}
+    <main className="mx-auto flex max-w-[1500px] flex-col gap-6 px-6 pb-16 pt-8">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <input
+            value={nameDraft}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onBlur={commitName}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            maxLength={80}
+            aria-label="Board name"
+            className="w-full bg-transparent font-display text-3xl font-semibold text-[var(--navy-dark)] outline-none focus:border-b-2 focus:border-[var(--accent-yellow)]"
           />
+          <p className="mt-1 text-sm text-[var(--gray-text)]">
+            {board.columns.length} columns, {cardCount} {cardCount === 1 ? "card" : "cards"}
+          </p>
         </div>
-      </main>
-    </div>
+        <button
+          type="button"
+          onClick={onDeleteBoard}
+          className="rounded-full border border-[var(--stroke)] px-4 py-2 text-sm font-semibold text-[var(--gray-text)] transition hover:border-red-300 hover:text-red-600"
+        >
+          Delete board
+        </button>
+      </header>
+      {saveError ? (
+        <p role="alert" className="text-sm font-medium text-red-600">
+          {saveError}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <DndContext
+          sensors={isChatLoading ? [] : sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          {/* The board is read-only while the assistant works, so its reply can't overwrite an edit. */}
+          <fieldset
+            disabled={isChatLoading}
+            aria-label="Board"
+            className="min-w-0 flex-1 transition disabled:opacity-60"
+          >
+            <section className="flex gap-4 overflow-x-auto pb-4">
+              {board.columns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                  onRename={handleRenameColumn}
+                  onAddCard={handleAddCard}
+                  onEditCard={setEditingCardId}
+                  onDeleteCard={handleDeleteCard}
+                />
+              ))}
+            </section>
+          </fieldset>
+          <DragOverlay>
+            {activeCard ? (
+              <div className="w-[260px]">
+                <KanbanCardPreview card={activeCard} />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        <ChatSidebar
+          history={chatHistory}
+          isLoading={isChatLoading}
+          error={chatError}
+          onSend={handleChatSend}
+        />
+      </div>
+      {editingCard ? (
+        <CardEditor
+          card={editingCard}
+          onSave={handleUpdateCard}
+          onClose={() => setEditingCardId(null)}
+        />
+      ) : null}
+    </main>
   );
 };

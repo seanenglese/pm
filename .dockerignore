@@ -9,3 +9,7 @@
 **/.DS_Store
 **/backend/data
 **/backend/app/static
+**/frontend/out
+**/frontend/coverage
+**/frontend/test-results
+**/frontend/playwright-report

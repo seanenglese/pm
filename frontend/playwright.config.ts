@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { E2E_PORT } from "./tests/global-setup";
 
 export default defineConfig({
   testDir: "./tests",
@@ -6,15 +7,10 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
   },
+  globalSetup: "./tests/global-setup.ts",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: process.env.E2E_BASE_URL ?? `http://127.0.0.1:${E2E_PORT}`,
     trace: "retain-on-failure",
-  },
-  webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: true,
-    timeout: 120_000,
   },
   projects: [
     {

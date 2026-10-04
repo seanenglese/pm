@@ -85,11 +85,43 @@ All met, and verified against the real stack (real Docker build, real SQLite, re
 - [x] The model can both answer questions and optionally modify the board using structured JSON output.
 - [x] The chat sidebar updates the board automatically when the model requests a change.
 
+## Phase 2: comprehensive project management app
+
+Goal: grow the MVP into a fuller project management app (real accounts, multiple boards per user, richer cards and boards), with strong unit coverage and integration tests against the real stack. Work proceeds in iterations; each one leaves the app working, tested, and documented.
+
+### Roadmap
+
+- [x] Iteration 1: real accounts and multiple boards
+- [x] Iteration 2: card editing and richer cards (edit title/details in place, priority, due date, labels), with the AI schema extended to match
+- [ ] Iteration 3: column management (add, delete, reorder columns) and a collapsible assistant panel so more columns fit on screen
+- [ ] Iteration 4: search and filtering on a board (text, priority, label, due/overdue)
+- [ ] Iteration 5: account settings UI (change password, delete account)
+- [ ] Later candidates: board sharing with other users, card comments/activity history, a cross-board overview, persisted chat history
+
+### Iteration 1: real accounts and multiple boards (complete)
+
+- Backend split into modules: `app/db.py` (connection, schema, migration, seed boards), `app/auth.py` (password hashing, sessions, `/api/auth/*`), `app/boards.py` (`/api/boards/*` including chat), `app/main.py` (app wiring, health checks, static files)
+- Accounts: register, sign in, sign out, current user, change password (signs out other sessions). Passwords are salted scrypt hashes; sessions are random bearer tokens stored only as SHA-256 hashes, expiring after 30 days
+- Boards: list, create (blank 4-column layout), read, save, rename, delete, chat; all scoped to the signed-in user (another user's board answers 404, never 403, so ids don't leak)
+- The old username-in-URL endpoints (`/api/users/{username}/...`) are gone; nothing is reachable without a session
+- Existing databases migrate in place (`PRAGMA user_version`); the demo account `user` / `password` is kept and keeps its board
+- Frontend: `AuthForm` (sign in / create account), `Workspace` (app bar, board tabs, new/rename/delete board, remembers the last open board), session restored from `localStorage` on reload, and an expired session returns to sign-in. Columns now scroll horizontally at a fixed width instead of a fixed 5-column grid, so boards can have any number of columns
+- Tests: backend 72 tests at 99% line coverage (`pytest --cov=app`); frontend 55 unit tests run against an in-memory fake of the whole API (`src/test/fakeApi.ts`); the 11 Playwright tests now run against the real Docker image (real FastAPI, SQLite, static build) with a throwaway database, so they are true integration tests (`tests/global-setup.ts`)
+- Backend tests without a local uv: `docker run --rm -v "<repo>/backend:/src" -w /src -e UV_PROJECT_ENVIRONMENT=/venv ghcr.io/astral-sh/uv:python3.12-bookworm-slim uv run --locked pytest`
+- Found while testing: at 1280px wide only three columns fit beside the assistant panel, which is why iteration 3 includes a collapsible panel
+
+### Iteration 2: card editing and richer cards (complete)
+
+- `Card` (`app/models.py`) gains optional `priority` (`low` / `medium` / `high` / null), `dueDate` (a real calendar date, so `2026-13-01` is rejected), and `labels` (up to 10, each 1-30 characters after trimming). The fields have defaults, so boards saved before this iteration still validate; reads run the stored JSON through `BoardData`, so the API always returns the full card shape. No schema migration was needed since boards are JSON blobs
+- Sample cards in the starter board now have priorities and labels (backend `DEFAULT_BOARD` and frontend `initialData` kept in sync)
+- The AI system prompt describes the new fields, and the board context message now starts with today's date so requests like "due next Friday" can be resolved
+- Frontend: cards show a priority badge, a due-date badge (overdue in red, due today in yellow), and label chips (`CardMeta`, shared with the drag preview); an **Edit** button on each card opens `CardEditor`, a modal dialog for title, details, priority, due date, and comma-separated labels (Escape, Cancel, or clicking outside closes it without saving)
+- Pure helpers in `lib/kanban.ts`: `parseLabels`, `todayIso`, `dueStatus`, `formatDueDate`
+- Tests: backend 83 (99% coverage), frontend 78 unit tests (97% line coverage), plus an e2e test that edits a card on the real stack and checks it after a reload
+- Vitest `testTimeout` raised to 15s: interaction-heavy tests that take about 1.5s alone went past the 5s default when all files ran in parallel
+
 ## Possible future work
 
-Not required by the original MVP scope, but worth knowing about if this project continues:
-
-- No real authentication — the sign-in is a hardcoded `user`/`password` check with no session/token, and the backend trusts whatever username appears in the URL path with no auth check at all.
-- Only one board per user, and only one hardcoded user can actually sign in through the UI (the backend itself supports multiple users).
 - The AI model (`nvidia/nemotron-3-super-120b-a12b:free`) is a free OpenRouter tier and can be slow or occasionally propose an unrequested board change on a multi-turn conversation (observed once during manual testing); the referential-integrity/schema validation in `app/models.py` prevents this from corrupting the board, but does not prevent the model from acting on a request it wasn't given.
-- No pagination or trimming of chat history sent to the model — a very long conversation would grow the request size indefinitely.
+- No pagination or trimming of chat history sent to the model; a very long conversation would grow the request size indefinitely.
+- No rate limiting on sign-in attempts.

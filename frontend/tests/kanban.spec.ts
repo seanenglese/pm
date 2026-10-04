@@ -1,156 +1,218 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const BOARD_ROUTE = "**/api/users/*/board";
-const CHAT_ROUTE = "**/api/users/*/chat";
+// These run against the real app (FastAPI + SQLite + static build; see global-setup.ts).
+// Each test registers its own account so tests never share board state.
 
-type ChatHandler = (
-  message: string,
-  board: Record<string, unknown>
-) => { reply: string; board?: Record<string, unknown> };
+const PASSWORD = "e2e-password";
 
-/** Fakes the backend board and chat contracts so e2e runs without a live FastAPI server. */
-const mockBoardApi = async (page: Page, chatHandler?: ChatHandler) => {
-  const initialBoard = {
-    columns: [
-      { id: "col-backlog", title: "Backlog", cardIds: ["card-1", "card-2"] },
-      { id: "col-discovery", title: "Discovery", cardIds: ["card-3"] },
-      { id: "col-progress", title: "In Progress", cardIds: ["card-4", "card-5"] },
-      { id: "col-review", title: "Review", cardIds: ["card-6"] },
-      { id: "col-done", title: "Done", cardIds: ["card-7", "card-8"] },
-    ],
-    cards: Object.fromEntries(
-      Array.from({ length: 8 }, (_, index) => {
-        const id = `card-${index + 1}`;
-        return [id, { id, title: `Card ${index + 1}`, details: "Seeded card." }];
-      })
-    ),
-  };
+const uniqueUsername = () =>
+  `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
-  let storedBoard: Record<string, unknown> = initialBoard;
-
-  await page.route(BOARD_ROUTE, async (route) => {
-    if (route.request().method() === "PUT") {
-      storedBoard = route.request().postDataJSON();
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ username: "user", board: storedBoard }),
-    });
-  });
-
-  await page.route(CHAT_ROUTE, async (route) => {
-    const { message } = route.request().postDataJSON();
-    const result = chatHandler
-      ? chatHandler(message, storedBoard)
-      : { reply: `Echo: ${message}` };
-    if (result.board) {
-      storedBoard = result.board;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ reply: result.reply, board: storedBoard }),
-    });
-  });
+const signIn = async (page: Page, username: string, password: string) => {
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 };
 
-const login = async (page: Page) => {
-  await page.getByLabel(/username/i).fill("user");
-  await page.getByLabel(/password/i).fill("password");
-  await page.getByRole("button", { name: /sign in/i }).click();
-};
-
-test("loads the kanban board", async ({ page }) => {
-  await mockBoardApi(page);
+const registerNewUser = async (page: Page) => {
+  const username = uniqueUsername();
   await page.goto("/");
-  await login(page);
-  await expect(page.getByRole("heading", { name: "Kanban Studio" })).toBeVisible();
-  await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
+  return username;
+};
+
+const columns = (page: Page) => page.locator('[data-testid^="column-"]');
+
+test("the demo account signs in to its board", async ({ page }) => {
+  await page.goto("/");
+  await signIn(page, "user", "password");
+
+  await expect(page.getByRole("navigation", { name: "Boards" })).toBeVisible();
+  await expect(columns(page).first()).toBeVisible();
 });
 
-test("adds a card to a column", async ({ page }) => {
-  await mockBoardApi(page);
+test("wrong credentials are rejected", async ({ page }) => {
   await page.goto("/");
-  await login(page);
-  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await signIn(page, "user", "not-the-password");
+
+  await expect(page.getByText("Invalid username or password")).toBeVisible();
+});
+
+test("a new account gets a starter board and stays signed in across reloads", async ({
+  page,
+}) => {
+  const username = await registerNewUser(page);
+
+  await expect(page.getByText(`Signed in as ${username}`)).toBeVisible();
+  await expect(columns(page)).toHaveCount(5);
+
+  await page.reload();
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
+});
+
+test("registering a taken username explains the problem", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("Username").fill("user");
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+
+  await expect(page.getByText("That username is already taken")).toBeVisible();
+});
+
+test("logging out ends the session", async ({ page }) => {
+  const username = await registerNewUser(page);
+
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+
+  await signIn(page, username, PASSWORD);
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
+});
+
+test("an added card is saved to the database", async ({ page }) => {
+  await registerNewUser(page);
+  const firstColumn = columns(page).first();
+
   await firstColumn.getByRole("button", { name: /add a card/i }).click();
   await firstColumn.getByPlaceholder("Card title").fill("Playwright card");
   await firstColumn.getByPlaceholder("Details").fill("Added via e2e.");
   await firstColumn.getByRole("button", { name: /add card/i }).click();
   await expect(firstColumn.getByText("Playwright card")).toBeVisible();
+
+  await page.reload();
+  await expect(columns(page).first().getByText("Playwright card")).toBeVisible();
 });
 
-test("moves a card between columns", async ({ page }) => {
-  await mockBoardApi(page);
-  await page.goto("/");
-  await login(page);
+test("editing a card's priority, due date, and labels is saved", async ({ page }) => {
+  await registerNewUser(page);
+  const card = page.getByTestId("card-card-2");
+  await expect(card.getByText("research")).toBeVisible();
+
+  await card.getByRole("button", { name: "Edit Gather customer signals" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit card" });
+  await dialog.getByLabel("Title").fill("Interview five customers");
+  await dialog.getByLabel("Priority").selectOption("high");
+  await dialog.getByLabel("Due date").fill("2020-01-31");
+  await dialog.getByLabel("Labels").fill("research, interviews");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.reload();
+  const saved = page.getByTestId("card-card-2");
+  await expect(saved.getByText("Interview five customers")).toBeVisible();
+  await expect(saved.getByText("high")).toBeVisible();
+  await expect(saved.getByTestId("due-date")).toHaveText("Overdue Jan 31, 2020");
+  await expect(saved.getByText("interviews")).toBeVisible();
+});
+
+test("a dragged card stays in its new column after a reload", async ({ page }) => {
+  await registerNewUser(page);
   const card = page.getByTestId("card-card-1");
-  const targetColumn = page.getByTestId("column-col-review");
+  const targetColumn = page.getByTestId("column-col-discovery");
   const cardBox = await card.boundingBox();
   const columnBox = await targetColumn.boundingBox();
   if (!cardBox || !columnBox) {
     throw new Error("Unable to resolve drag coordinates.");
   }
 
-  await page.mouse.move(
-    cardBox.x + cardBox.width / 2,
-    cardBox.y + cardBox.height / 2
-  );
+  await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(
-    columnBox.x + columnBox.width / 2,
-    columnBox.y + 120,
-    { steps: 12 }
-  );
+  await page.mouse.move(columnBox.x + columnBox.width / 2, columnBox.y + 120, {
+    steps: 12,
+  });
   await page.mouse.up();
   await expect(targetColumn.getByTestId("card-card-1")).toBeVisible();
-});
-
-test("persists a rename across a page reload", async ({ page }) => {
-  await mockBoardApi(page);
-  await page.goto("/");
-  await login(page);
-
-  const firstColumn = page.locator('[data-testid^="column-"]').first();
-  const titleInput = firstColumn.getByLabel("Column title");
-  await titleInput.fill("Renamed via e2e");
-  await titleInput.blur();
 
   await page.reload();
-  await login(page);
-
-  await expect(
-    page.locator('[data-testid^="column-"]').first().getByLabel("Column title")
-  ).toHaveValue("Renamed via e2e");
+  await expect(page.getByTestId("column-col-discovery").getByTestId("card-card-1")).toBeVisible();
 });
 
-test("sends a chat message and applies the assistant's board update automatically", async ({
+test("boards can be created, switched, renamed, and deleted", async ({ page }) => {
+  await registerNewUser(page);
+  const nav = page.getByRole("navigation", { name: "Boards" });
+
+  await nav.getByRole("button", { name: "New board" }).click();
+  await page.getByLabel("New board name").fill("Launch");
+  await nav.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("Launch");
+  await expect(columns(page)).toHaveCount(4);
+
+  await nav.getByRole("button", { name: "My first board" }).click();
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
+  await expect(columns(page)).toHaveCount(5);
+
+  await nav.getByRole("button", { name: "Launch" }).click();
+  await page.getByLabel("Board name", { exact: true }).fill("Launch v2");
+  await page.getByLabel("Board name", { exact: true }).press("Enter");
+  await expect(nav.getByRole("button", { name: "Launch v2" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("Launch v2");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete board" }).click();
+  await expect(nav.getByRole("button", { name: "Launch v2" })).toHaveCount(0);
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
+});
+
+test("one user's boards are invisible to another", async ({ browser }) => {
+  const alice = await browser.newPage();
+  await registerNewUser(alice);
+  const nav = alice.getByRole("navigation", { name: "Boards" });
+  await nav.getByRole("button", { name: "New board" }).click();
+  await alice.getByLabel("New board name").fill("Alice private");
+  await nav.getByRole("button", { name: "Create" }).click();
+  await expect(alice.getByLabel("Board name", { exact: true })).toHaveValue("Alice private");
+
+  const bob = await browser.newPage();
+  await registerNewUser(bob);
+  await expect(bob.getByRole("button", { name: "Alice private" })).toHaveCount(0);
+  await expect(
+    bob.getByRole("navigation", { name: "Boards" }).getByRole("button", { name: "My first board" })
+  ).toBeVisible();
+});
+
+test("the chat sidebar reports a failed assistant call from the real backend", async ({
   page,
 }) => {
-  await mockBoardApi(page, (message, board) => {
-    if (/rename/i.test(message)) {
-      const columns = board.columns as Array<{ id: string; title: string; cardIds: string[] }>;
-      return {
-        reply: "Renamed the first column.",
-        board: {
-          ...board,
-          columns: columns.map((column, index) =>
-            index === 0 ? { ...column, title: "Renamed by AI" } : column
-          ),
-        },
-      };
-    }
-    return { reply: `You said: ${message}` };
+  await registerNewUser(page);
+
+  await page.getByLabel("Chat message").fill("Hello?");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  // The e2e container has no OPENROUTER_API_KEY, so the backend answers 502.
+  await expect(page.getByText(/could not reach the assistant/i)).toBeVisible();
+  await expect(page.getByText("Hello?")).toBeVisible();
+});
+
+test("the assistant's board update is applied without a refresh", async ({ page }) => {
+  await registerNewUser(page);
+  // Stand in for the model: the rest of the flow (auth, board load) is real.
+  await page.route("**/api/boards/*/chat", async (route) => {
+    const boardUrl = route.request().url().replace(/\/chat$/, "");
+    const current = await (
+      await route.fetch({ url: boardUrl, method: "GET" })
+    ).json();
+    const board = current.board;
+    board.columns[0].title = "Renamed by AI";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ reply: "Renamed the first column.", board }),
+    });
   });
-  await page.goto("/");
-  await login(page);
 
   await page.getByLabel("Chat message").fill("Please rename the first column");
-  await page.getByRole("button", { name: /send/i }).click();
+  await page.getByRole("button", { name: "Send" }).click();
 
   await expect(page.getByText("Renamed the first column.")).toBeVisible();
-  await expect(
-    page.locator('[data-testid^="column-"]').first().getByLabel("Column title")
-  ).toHaveValue("Renamed by AI");
+  await expect(columns(page).first().getByLabel("Column title")).toHaveValue("Renamed by AI");
 });
