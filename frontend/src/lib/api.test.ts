@@ -3,6 +3,7 @@ import {
   UNAUTHORIZED_EVENT,
   changePassword,
   createBoard,
+  deleteAccount,
   deleteBoard,
   fetchBoard,
   getToken,
@@ -146,5 +147,29 @@ describe("api client", () => {
     await expect(logout()).rejects.toThrow();
 
     expect(getToken()).toBeNull();
+  });
+});
+
+describe("deleteAccount", () => {
+  it("sends the password with DELETE and forgets the session", async () => {
+    localStorage.setItem("pm-session-token", "abc");
+    const fetchMock = stubFetch(204);
+
+    await deleteAccount("my-password");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/me", {
+      method: "DELETE",
+      headers: { Authorization: "Bearer abc", "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "my-password" }),
+    });
+    expect(getToken()).toBeNull();
+  });
+
+  it("keeps the session when the server refuses", async () => {
+    localStorage.setItem("pm-session-token", "abc");
+    stubFetch(400, { detail: "Password is incorrect" });
+
+    await expect(deleteAccount("nope")).rejects.toThrow("Password is incorrect");
+    expect(getToken()).toBe("abc");
   });
 });

@@ -108,6 +108,12 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
     body: { currentPassword, newPassword },
   });
 
+/** Deletes the signed-in account, its boards, and all of its sessions. */
+export const deleteAccount = async (password: string) => {
+  await request<void>("/api/auth/me", { method: "DELETE", body: { password } });
+  clearToken();
+};
+
 export const listBoards = () => request<BoardSummary[]>("/api/boards");
 
 export const createBoard = (name: string) =>

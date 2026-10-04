@@ -36,6 +36,11 @@ A wrong username or password shows "Invalid username or password". Your boards a
 
 You stay signed in when you reload the page or come back later, for up to 30 days. Click **Log out** at the top right to sign out on this browser.
 
+Click **Account** at the top right to manage your account:
+
+- **Change password**: enter your current password and the new one twice (at least 8 characters), then click **Change password**. This browser stays signed in; any other browser or device signed in to your account is signed out.
+- **Delete account**: enter your password, click **Delete my account**, and confirm. Your account and all of its boards are deleted for good, and you return to the sign-in page. The username can then be registered again.
+
 ## Boards
 
 Your boards are listed as tabs across the top of the page. The board you had open last opens again next time.

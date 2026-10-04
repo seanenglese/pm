@@ -77,6 +77,41 @@ test("logging out ends the session", async ({ page }) => {
   await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
 });
 
+test("changing the password takes effect at the next sign-in", async ({ page }) => {
+  const username = await registerNewUser(page);
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  const account = page.getByRole("dialog", { name: "Account" });
+  await account.getByLabel("Current password").fill(PASSWORD);
+  await account.getByLabel("New password", { exact: true }).fill("a-new-password");
+  await account.getByLabel("Confirm new password").fill("a-new-password");
+  await account.getByRole("button", { name: "Change password" }).click();
+  await expect(account.getByText(/^Password changed/)).toBeVisible();
+  await account.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(account).toBeHidden();
+
+  await page.getByRole("button", { name: "Log out" }).click();
+  await signIn(page, username, PASSWORD);
+  await expect(page.getByText("Invalid username or password")).toBeVisible();
+  await page.getByLabel("Password").fill("a-new-password");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByLabel("Board name", { exact: true })).toHaveValue("My first board");
+});
+
+test("a deleted account cannot sign in again", async ({ page }) => {
+  const username = await registerNewUser(page);
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  const account = page.getByRole("dialog", { name: "Account" });
+  await account.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  page.once("dialog", (dialog) => dialog.accept());
+  await account.getByRole("button", { name: "Delete my account" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+
+  await signIn(page, username, PASSWORD);
+  await expect(page.getByText("Invalid username or password")).toBeVisible();
+});
+
 test("an added card is saved to the database", async ({ page }) => {
   await registerNewUser(page);
   const firstColumn = columns(page).first();

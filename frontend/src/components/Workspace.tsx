@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import clsx from "clsx";
+import { AccountSettings } from "@/components/AccountSettings";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import {
   createBoard,
@@ -15,19 +16,21 @@ import {
 type WorkspaceProps = {
   user: User;
   onLogout: () => void;
+  onAccountDeleted: () => void;
 };
 
 const ACTIVE_BOARD_KEY = "pm-active-board";
 
 const rememberedBoardId = () => Number(localStorage.getItem(ACTIVE_BOARD_KEY));
 
-export const Workspace = ({ user, onLogout }: WorkspaceProps) => {
+export const Workspace = ({ user, onLogout, onAccountDeleted }: WorkspaceProps) => {
   const [boards, setBoards] = useState<BoardSummary[] | null>(null);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
 
   const loadBoards = useCallback(() => {
     listBoards()
@@ -110,6 +113,13 @@ export const Workspace = ({ user, onLogout }: WorkspaceProps) => {
               Signed in as{" "}
               <span className="font-semibold text-[var(--navy-dark)]">{user.username}</span>
             </span>
+            <button
+              type="button"
+              onClick={() => setIsAccountOpen(true)}
+              className="rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-sm font-semibold text-[var(--navy-dark)] shadow-sm transition hover:border-[var(--primary-blue)]"
+            >
+              Account
+            </button>
             <button
               type="button"
               onClick={onLogout}
@@ -222,6 +232,13 @@ export const Workspace = ({ user, onLogout }: WorkspaceProps) => {
           </p>
         </main>
       )}
+      {isAccountOpen ? (
+        <AccountSettings
+          user={user}
+          onClose={() => setIsAccountOpen(false)}
+          onAccountDeleted={onAccountDeleted}
+        />
+      ) : null}
     </div>
   );
 };

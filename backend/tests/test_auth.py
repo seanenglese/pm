@@ -205,3 +205,61 @@ def test_login_clears_expired_sessions(client, register, monkeypatch) -> None:
     with db.db_connection() as connection:
         count = connection.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
     assert count == 1
+
+
+def _delete_account(client, headers, password: str):
+    return client.request("DELETE", "/api/auth/me", headers=headers, json={"password": password})
+
+
+def test_delete_account_removes_the_user_boards_and_sessions(client, register) -> None:
+    headers, user = register("kate", "kate-password")
+    other_token = _login(client, "kate", "kate-password").json()["token"]
+    client.post("/api/boards", headers=headers, json={"name": "Second"})
+
+    response = _delete_account(client, headers, "kate-password")
+
+    assert response.status_code == 204
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    other = {"Authorization": f"Bearer {other_token}"}
+    assert client.get("/api/auth/me", headers=other).status_code == 401
+    assert _login(client, "kate", "kate-password").status_code == 401
+    with db.db_connection() as connection:
+        boards = connection.execute(
+            "SELECT COUNT(*) FROM boards WHERE user_id = ?", (user["id"],)
+        ).fetchone()[0]
+    assert boards == 0
+
+
+def test_delete_account_frees_the_username(client, register) -> None:
+    headers, _ = register("liam", "liam-password")
+    _delete_account(client, headers, "liam-password")
+
+    response = client.post(
+        "/api/auth/register", json={"username": "liam", "password": "fresh-password"}
+    )
+
+    assert response.status_code == 201
+
+
+def test_delete_account_requires_the_password(client, register) -> None:
+    headers, _ = register("mia", "mia-password")
+
+    response = _delete_account(client, headers, "wrong-password")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Password is incorrect"
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+
+
+def test_delete_account_leaves_other_users_alone(client, register, headers, board_id) -> None:
+    doomed, _ = register("nora", "nora-password")
+
+    _delete_account(client, doomed, "nora-password")
+
+    assert client.get(f"/api/boards/{board_id}", headers=headers).status_code == 200
+
+
+def test_delete_account_requires_a_session(client) -> None:
+    response = client.request("DELETE", "/api/auth/me", json={"password": "x"})
+
+    assert response.status_code == 401

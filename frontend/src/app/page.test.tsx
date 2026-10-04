@@ -140,3 +140,28 @@ describe("Home auth flow", () => {
     await signInHeading();
   });
 });
+
+describe("Home account settings", () => {
+  it("deletes the account from the Account dialog and returns to sign-in", async () => {
+    const api = installFakeApi();
+    render(<Home />);
+    await signInHeading();
+    await userEvent.click(screen.getByRole("button", { name: /create an account/i }));
+    await fillCredentials("leaving", "leaving-password");
+    await userEvent.click(screen.getByRole("button", { name: /^create account$/i }));
+    await waitFor(() => expect(screen.getByLabelText("Board name")).toBeInTheDocument());
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await userEvent.click(screen.getByRole("button", { name: "Account" }));
+    await userEvent.type(screen.getByLabelText("Password", { exact: true }), "leaving-password");
+    await userEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+
+    await signInHeading();
+    expect(getToken()).toBeNull();
+    expect(api.boards.some((board) => board.owner === "leaving")).toBe(false);
+
+    await fillCredentials("leaving", "leaving-password");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid username or password");
+  });
+});

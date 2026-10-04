@@ -95,7 +95,7 @@ Goal: grow the MVP into a fuller project management app (real accounts, multiple
 - [x] Iteration 2: card editing and richer cards (edit title/details in place, priority, due date, labels), with the AI schema extended to match
 - [x] Iteration 3: column management (add, delete, reorder columns) and a collapsible assistant panel so more columns fit on screen
 - [x] Iteration 4: search and filtering on a board (text, priority, label, due/overdue)
-- [ ] Iteration 5: account settings UI (change password, delete account)
+- [x] Iteration 5: account settings UI (change password, delete account)
 - [ ] Later candidates: board sharing with other users, card comments/activity history, a cross-board overview, persisted chat history
 
 ### Iteration 1: real accounts and multiple boards (complete)
@@ -136,6 +136,16 @@ Goal: grow the MVP into a fuller project management app (real accounts, multiple
 - Filters live in `KanbanBoard` state, so they reset when you switch boards or reload
 - Pure helpers in `lib/kanban.ts`: `cardMatches`, `hasFilters`, `boardLabels`, `NO_FILTERS` (the "next 7 days" window is computed with local calendar dates, tested across a month boundary)
 - Tests: frontend 113 unit tests (97% line coverage), e2e 15 (adds search plus combined label/priority filtering on the real stack)
+
+### Iteration 5: account settings (complete)
+
+- Backend: `DELETE /api/auth/me` with `{password}` deletes the account; boards and sessions go with it through `ON DELETE CASCADE` (also tested on a database migrated from the pre-accounts schema). A wrong password answers 400 and changes nothing; the username becomes free to register again
+- Frontend: an **Account** button in the app bar opens `AccountSettings`, a dialog with two forms. **Change password** (current, new, confirm) checks length and that the new passwords match before calling the existing `PUT /api/auth/password`, and says other devices were signed out. **Delete account** needs the password plus a confirmation, then returns to the sign-in page
+- `api.ts::deleteAccount` clears the stored token on success; the fake API in `src/test/fakeApi.ts` implements the new endpoint
+- Tests: backend 89 (99% coverage), frontend 124 unit tests (98% line coverage), e2e 17 (adds a password change followed by signing in with the new password, and deleting an account followed by a failed sign-in)
+- e2e lesson: Playwright's text locators match substrings, so "New password" also finds "Confirm new password" and "Close" also finds a "Close onboarding sprint" card. Scope locators to the dialog and use `exact: true`
+
+All five planned iterations are complete. The "Later candidates" in the roadmap are the natural next steps.
 
 ## Possible future work
 

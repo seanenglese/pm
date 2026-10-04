@@ -86,3 +86,25 @@ def test_deleting_a_user_cascades_to_boards_and_sessions(client, register) -> No
     assert boards == 0
     assert sessions == 0
     assert client.get("/api/auth/me", headers=headers).status_code == 401
+
+
+def test_migrated_user_can_delete_their_account(client, tmp_path, monkeypatch) -> None:
+    path = tmp_path / "legacy.db"
+    _make_legacy_database(path)
+    monkeypatch.setattr(db, "DB_PATH", path)
+    db.init_db()
+    auth.ensure_demo_user()
+    token = client.post(
+        "/api/auth/login", json={"username": "user", "password": "password"}
+    ).json()["token"]
+
+    response = client.request(
+        "DELETE",
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"password": "password"},
+    )
+
+    assert response.status_code == 204
+    with db.db_connection() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM boards").fetchone()[0] == 0

@@ -106,6 +106,17 @@ export const installFakeApi = (options: { chat?: ChatHandler } = {}) => {
       sessions.delete(token!);
       return json(204);
     }
+    if (url === "/api/auth/me" && method === "DELETE") {
+      if (passwords.get(username) !== body.password) {
+        return json(400, { detail: "Password is incorrect" });
+      }
+      passwords.delete(username);
+      sessions.delete(token!);
+      for (const stored of boards.filter((candidate) => candidate.owner === username)) {
+        boards.splice(boards.indexOf(stored), 1);
+      }
+      return json(204);
+    }
     if (url === "/api/auth/me") {
       return json(200, userOf(username));
     }

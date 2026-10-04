@@ -9,7 +9,7 @@ const setup = () => {
   const api = installFakeApi();
   api.signIn();
   const onLogout = vi.fn();
-  render(<Workspace user={USER} onLogout={onLogout} />);
+  render(<Workspace user={USER} onLogout={onLogout} onAccountDeleted={vi.fn()} />);
   return { api, onLogout };
 };
 
@@ -141,7 +141,7 @@ describe("Workspace", () => {
     api.fetchMock.mockImplementationOnce(
       async () => ({ ok: false, status: 500, json: async () => ({}) }) as Response
     );
-    render(<Workspace user={USER} onLogout={vi.fn()} />);
+    render(<Workspace user={USER} onLogout={vi.fn()} onAccountDeleted={vi.fn()} />);
 
     await userEvent.click(await screen.findByRole("button", { name: /retry/i }));
     api.fetchMock.mockImplementation(realImpl);

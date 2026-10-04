@@ -37,5 +37,7 @@ export default function Home() {
     return <AuthForm onAuthenticated={setUser} />;
   }
 
-  return <Workspace user={user} onLogout={handleLogout} />;
+  return (
+    <Workspace user={user} onLogout={handleLogout} onAccountDeleted={() => setUser(null)} />
+  );
 }

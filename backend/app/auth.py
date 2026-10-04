@@ -40,6 +40,12 @@ class PasswordChange(BaseModel):
     newPassword: str = Field(min_length=8, max_length=128)
 
 
+class AccountDeletion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str
+
+
 class User(BaseModel):
     id: int
     username: str
@@ -174,6 +180,19 @@ def logout(
 @router.get("/me")
 def me(user: CurrentUser) -> User:
     return user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(payload: AccountDeletion, user: CurrentUser) -> Response:
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT password_hash FROM users WHERE id = ?", (user.id,)
+        ).fetchone()
+        if not verify_password(payload.password, row["password_hash"]):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password is incorrect")
+        # Boards and sessions go with the user (ON DELETE CASCADE).
+        connection.execute("DELETE FROM users WHERE id = ?", (user.id,))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/password", status_code=status.HTTP_204_NO_CONTENT)

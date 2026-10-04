@@ -30,7 +30,7 @@ This directory contains the Python FastAPI service that powers the project manag
 - /api/health returns service status metadata
 - /api/ai/health sends a trivial prompt through OpenRouter (see app/ai.py) and returns the model's reply, or a 502 if the call fails
 - / serves the built Next.js static export from app/static, which the Dockerfile fills in at image build time (gitignored; copy frontend/out/* there by hand for a bare uvicorn run)
-- /api/auth/register, /login, /logout, /me, /password (app/auth.py) manage accounts and bearer-token sessions; every other /api route except the health checks requires `Authorization: Bearer <token>` and answers 401 without a valid session
+- /api/auth/register, /login, /logout, /me (GET, or DELETE with the password to delete the account and everything in it), /password (app/auth.py) manage accounts and bearer-token sessions; every other /api route except the health checks requires `Authorization: Bearer <token>` and answers 401 without a valid session
 - /api/boards lists and creates the signed-in user's boards; /api/boards/{id} reads (GET), saves the board JSON (PUT), renames (PATCH), and deletes (DELETE) one; a board owned by someone else answers 404
 - /api/boards/{id}/chat sends that board, conversation history, and a new message to OpenRouter (see app/ai.py::ask_about_board) and returns {reply, board}; a valid board_update from the model is persisted before responding, an unsafe one (e.g. a card id referenced but not defined) is dropped and only the reply is returned
 - Board/card/column shapes live in app/models.py and are shared by the board and chat endpoints, so both enforce the same schema and referential-integrity rules
