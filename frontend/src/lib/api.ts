@@ -18,7 +18,7 @@ export type BoardSummary = {
   updatedAt: string;
 };
 
-export type BoardDetail = BoardSummary & { board: BoardData };
+type BoardDetail = BoardSummary & { board: BoardData };
 
 type AuthResponse = { token: string; user: User };
 
@@ -43,7 +43,7 @@ export class ApiError extends Error {
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 const request = async <T>(
   path: string,

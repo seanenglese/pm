@@ -21,6 +21,9 @@ type WorkspaceProps = {
 
 const ACTIVE_BOARD_KEY = "pm-active-board";
 
+const appBarButtonClass =
+  "rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-sm font-semibold text-[var(--navy-dark)] shadow-sm transition hover:border-[var(--primary-blue)]";
+
 const rememberedBoardId = () => Number(localStorage.getItem(ACTIVE_BOARD_KEY));
 
 export const Workspace = ({ user, onLogout, onAccountDeleted }: WorkspaceProps) => {
@@ -116,14 +119,14 @@ export const Workspace = ({ user, onLogout, onAccountDeleted }: WorkspaceProps) 
             <button
               type="button"
               onClick={() => setIsAccountOpen(true)}
-              className="rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-sm font-semibold text-[var(--navy-dark)] shadow-sm transition hover:border-[var(--primary-blue)]"
+              className={appBarButtonClass}
             >
               Account
             </button>
             <button
               type="button"
               onClick={onLogout}
-              className="rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-sm font-semibold text-[var(--navy-dark)] shadow-sm transition hover:border-[var(--primary-blue)]"
+              className={appBarButtonClass}
             >
               Log out
             </button>

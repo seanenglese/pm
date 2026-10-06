@@ -3,7 +3,7 @@ import os
 from datetime import date
 
 import httpx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.models import BoardData
 
@@ -110,12 +110,13 @@ async def ask_about_board(
     if not isinstance(reply, str):
         raise AIConnectionError("AI response is missing a text reply")
 
+    # An unsafe board (e.g. a column referencing a missing card) is dropped and
+    # only the reply is kept.
     board_update = None
-    raw_update = raw.get("board_update")
-    if raw_update is not None:
+    if raw.get("board_update") is not None:
         try:
-            board_update = BoardData.model_validate(raw_update)
-        except ValueError:
-            board_update = None
+            board_update = BoardData.model_validate(raw["board_update"])
+        except ValidationError:
+            pass
 
     return AIBoardResponse(reply=reply, board_update=board_update)

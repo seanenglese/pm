@@ -292,7 +292,7 @@ export const KanbanBoard = ({
   const visibleCards = (cardIds: string[]) =>
     cardIds
       .map((cardId) => board.cards[cardId])
-      .filter((card) => !isFiltered || cardMatches(card, filters, today));
+      .filter((card) => cardMatches(card, filters, today));
   const shownCount = board.columns.reduce(
     (total, column) => total + visibleCards(column.cardIds).length,
     0

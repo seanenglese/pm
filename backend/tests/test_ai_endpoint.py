@@ -1,13 +1,8 @@
-from fastapi.testclient import TestClient
-
 from app import main
 from app.ai import AIConnectionError
-from app.main import app
-
-client = TestClient(app)
 
 
-def test_ai_health_returns_the_model_reply(monkeypatch) -> None:
+def test_ai_health_returns_the_model_reply(client, monkeypatch) -> None:
     async def fake_call_openrouter(messages: list[dict]) -> str:
         assert "2 + 2" in messages[0]["content"]
         return "4"
@@ -20,7 +15,7 @@ def test_ai_health_returns_the_model_reply(monkeypatch) -> None:
     assert response.json() == {"status": "ok", "reply": "4"}
 
 
-def test_ai_health_returns_502_when_openrouter_fails(monkeypatch) -> None:
+def test_ai_health_returns_502_when_openrouter_fails(client, monkeypatch) -> None:
     async def failing_call_openrouter(messages: list[dict]) -> str:
         raise AIConnectionError("OpenRouter request failed: 401 unauthorized")
 

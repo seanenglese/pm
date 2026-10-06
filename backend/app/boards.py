@@ -18,6 +18,9 @@ class BoardName(BaseModel):
 
     name: str = Field(min_length=1, max_length=80)
 
+    def cleaned(self) -> str:
+        return self.name.strip() or "Untitled"
+
 
 class ChatMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -84,7 +87,7 @@ def list_boards(user: CurrentUser) -> list[dict]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_user_board(payload: BoardName, user: CurrentUser) -> dict:
     with db_connection() as connection:
-        board_id = create_board(connection, user.id, payload.name.strip() or "Untitled")
+        board_id = create_board(connection, user.id, payload.cleaned())
         return _detail(_owned_board(connection, board_id, user.id))
 
 
@@ -107,7 +110,7 @@ def rename_board(board_id: int, payload: BoardName, user: CurrentUser) -> dict:
         _owned_board(connection, board_id, user.id)
         connection.execute(
             "UPDATE boards SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (payload.name.strip() or "Untitled", board_id),
+            (payload.cleaned(), board_id),
         )
         return _summary(_owned_board(connection, board_id, user.id))
 

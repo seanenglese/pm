@@ -38,11 +38,13 @@ def openrouter_key(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
 
+def _fake_client(monkeypatch, **kwargs) -> None:
+    monkeypatch.setattr(ai.httpx, "AsyncClient", lambda **_: FakeAsyncClient(**kwargs))
+
+
 def test_call_openrouter_returns_message_content(monkeypatch):
     response = FakeResponse(200, {"choices": [{"message": {"content": "4"}}]})
-    monkeypatch.setattr(
-        ai.httpx, "AsyncClient", lambda **kwargs: FakeAsyncClient(response=response)
-    )
+    _fake_client(monkeypatch, response=response)
 
     reply = asyncio.run(ai.call_openrouter([{"role": "user", "content": "2 + 2?"}]))
 
@@ -58,9 +60,7 @@ def test_call_openrouter_raises_when_key_missing(monkeypatch):
 
 def test_call_openrouter_raises_on_non_200_response(monkeypatch):
     response = FakeResponse(401, text="unauthorized")
-    monkeypatch.setattr(
-        ai.httpx, "AsyncClient", lambda **kwargs: FakeAsyncClient(response=response)
-    )
+    _fake_client(monkeypatch, response=response)
 
     with pytest.raises(ai.AIConnectionError):
         asyncio.run(ai.call_openrouter([{"role": "user", "content": "2 + 2?"}]))
@@ -79,20 +79,14 @@ def test_call_openrouter_raises_on_non_200_response(monkeypatch):
 )
 def test_call_openrouter_raises_on_unusable_200_response(monkeypatch, payload):
     response = FakeResponse(200, payload)
-    monkeypatch.setattr(
-        ai.httpx, "AsyncClient", lambda **kwargs: FakeAsyncClient(response=response)
-    )
+    _fake_client(monkeypatch, response=response)
 
     with pytest.raises(ai.AIConnectionError):
         asyncio.run(ai.call_openrouter([{"role": "user", "content": "2 + 2?"}]))
 
 
 def test_call_openrouter_raises_on_network_error(monkeypatch):
-    monkeypatch.setattr(
-        ai.httpx,
-        "AsyncClient",
-        lambda **kwargs: FakeAsyncClient(exception=httpx.ConnectError("boom")),
-    )
+    _fake_client(monkeypatch, exception=httpx.ConnectError("boom"))
 
     with pytest.raises(ai.AIConnectionError):
         asyncio.run(ai.call_openrouter([{"role": "user", "content": "2 + 2?"}]))

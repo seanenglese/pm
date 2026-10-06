@@ -52,20 +52,20 @@ class User(BaseModel):
     createdAt: str
 
 
+def _scrypt(password: str, salt: bytes) -> str:
+    return hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1).hex()
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
-    return f"scrypt${salt.hex()}${digest.hex()}"
+    return f"scrypt${salt.hex()}${_scrypt(password, salt)}"
 
 
 def verify_password(password: str, stored: str | None) -> bool:
     if not stored:
         return False
     _, salt_hex, digest_hex = stored.split("$")
-    digest = hashlib.scrypt(
-        password.encode(), salt=bytes.fromhex(salt_hex), n=2**14, r=8, p=1
-    )
-    return hmac.compare_digest(digest.hex(), digest_hex)
+    return hmac.compare_digest(_scrypt(password, bytes.fromhex(salt_hex)), digest_hex)
 
 
 def _token_hash(token: str) -> str:
@@ -74,6 +74,16 @@ def _token_hash(token: str) -> str:
 
 def _user_from_row(row: sqlite3.Row) -> User:
     return User(id=row["id"], username=row["username"], createdAt=row["created_at"])
+
+
+def _require_password(
+    connection: sqlite3.Connection, user_id: int, password: str, detail: str
+) -> None:
+    row = connection.execute(
+        "SELECT password_hash FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if not verify_password(password, row["password_hash"]):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail)
 
 
 def create_session(connection: sqlite3.Connection, user_id: int) -> str:
@@ -92,7 +102,6 @@ def ensure_demo_user() -> None:
             "SELECT password_hash FROM users WHERE username = ?", (DEMO_USERNAME,)
         ).fetchone()
         if row is None:
-
             cursor = connection.execute(
                 "INSERT INTO users (username, password_hash) VALUES (?, ?)",
                 (DEMO_USERNAME, hash_password(DEMO_PASSWORD)),
@@ -129,7 +138,6 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: Credentials) -> dict:
-
     with db_connection() as connection:
         try:
             cursor = connection.execute(
@@ -185,11 +193,7 @@ def me(user: CurrentUser) -> User:
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(payload: AccountDeletion, user: CurrentUser) -> Response:
     with db_connection() as connection:
-        row = connection.execute(
-            "SELECT password_hash FROM users WHERE id = ?", (user.id,)
-        ).fetchone()
-        if not verify_password(payload.password, row["password_hash"]):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password is incorrect")
+        _require_password(connection, user.id, payload.password, "Password is incorrect")
         # Boards and sessions go with the user (ON DELETE CASCADE).
         connection.execute("DELETE FROM users WHERE id = ?", (user.id,))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -202,13 +206,9 @@ def change_password(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
 ) -> Response:
     with db_connection() as connection:
-        row = connection.execute(
-            "SELECT password_hash FROM users WHERE id = ?", (user.id,)
-        ).fetchone()
-        if not verify_password(payload.currentPassword, row["password_hash"]):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "Current password is incorrect"
-            )
+        _require_password(
+            connection, user.id, payload.currentPassword, "Current password is incorrect"
+        )
         connection.execute(
             "UPDATE users SET password_hash = ? WHERE id = ?",
             (hash_password(payload.newPassword), user.id),
